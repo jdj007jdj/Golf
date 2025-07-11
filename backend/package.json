@@ -1,0 +1,28 @@
+{
+  "name": "Golf-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "nodemon src/index.ts",
+    "test:unit": "jest --config=jest.config.ts --selectProjects unit",
+    "test:integration": "jest --config=jest.config.ts --selectProjects integration",
+    "migrate": "prisma migrate deploy",
+    "security:check": "npm audit && npx depcheck"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "@prisma/client": "^5.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "passport": "^0.6.0",
+    "passport-jwt": "^4.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "prisma": "^5.0.0",
+    "ts-node": "^10.0.0",
+    "@types/express": "^4.17.1"
+  }
+}
