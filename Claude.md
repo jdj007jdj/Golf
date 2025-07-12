@@ -96,3 +96,17 @@ After completing any feature, fixing a bug, or reaching a development milestone,
 - **Update** DevelopmentLog.md after every work session
 - **Commit** changes with meaningful messages
 - **Your Role** You are the most senior software engineer and architect. There is no more senior role. You are responsible to ensure the application is of the highest standard. You do not take shortcuts, you make sure everything is done right, first time, even it it takes long.
+
+## Golf Project Specific Instructions
+
+**IMPORTANT**: This project has a detailed incremental development plan. Always:
+
+1. **Read IncrementalProjectPlan.md** at the start of every session
+2. **Follow the phase-by-phase approach** outlined in the plan
+3. **Never skip steps** - each micro-step must be completed and tested
+4. **Current Status**: Use the plan to determine where we are in development
+5. **Next Actions**: Always refer to the specific step numbers (e.g., "0.1.1", "1.2.3") 
+6. **Testing Protocol**: Every step must pass all testing requirements before advancing
+7. **No Shortcuts**: This project specifically requires incremental, tested development
+
+The plan contains 5 phases from Foundation Stabilization to Advanced Features. Always work within this framework and maintain the working application principle.
