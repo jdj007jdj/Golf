@@ -15,8 +15,14 @@
 ### Development Requirements
 - **Android**: Android Studio, Java 17, Android SDK
 - **iOS**: Xcode 14+, CocoaPods, macOS (for iOS development)
-- **Node.js**: v18+
-- **React Native CLI**: Latest version
+- **Node.js**: v18+ (tested with v22.16.0)
+- **React Native CLI**: v16.0.3 (latest compatible - v17+ has Node.js 22 compatibility issues)
+
+### Environment Compatibility Notes
+- **CLI Compatibility**: React Native CLI v17.0.0+ has known issues with Node.js 22.x due to connect middleware compatibility
+- **Metro Bundler**: v0.82.5 works well with CLI v16.0.3
+- **Metro Config**: @react-native/metro-config@0.81.0-rc.0 provides stable integration
+- **Tested Configuration**: Node.js 22.16.0 + CLI 16.0.3 + Metro 0.82.5 = ✅ Stable
 
 ## Project Structure
 

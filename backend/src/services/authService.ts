@@ -67,7 +67,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 export function generateToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): string {
   return jwt.sign(payload, config.jwtSecret, {
     expiresIn: config.jwtExpiresIn,
-  });
+  } as jwt.SignOptions);
 }
 
 /**
@@ -76,7 +76,7 @@ export function generateToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): strin
 export function generateRefreshToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): string {
   return jwt.sign(payload, config.jwtRefreshSecret, {
     expiresIn: config.jwtRefreshExpiresIn,
-  });
+  } as jwt.SignOptions);
 }
 
 /**

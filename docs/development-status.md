@@ -112,8 +112,11 @@
 ### Mobile App
 | Component | Technology | Version | Status |
 |-----------|------------|---------|--------|
-| Framework | React Native | 0.76.5 | ✅ Production |
+| Framework | React Native | 0.76.9 | ✅ Production |
 | Language | TypeScript | 5.7.2 | ✅ Production |
+| CLI | @react-native-community/cli | 16.0.3 | ✅ Production (Latest Compatible) |
+| Metro | Metro Bundler | 0.82.5 | ✅ Production |
+| Metro Config | @react-native/metro-config | 0.81.0-rc.0 | ✅ Production |
 | Database | react-native-nitro-sqlite | 9.1.10 | ✅ Production |
 | State | Redux Toolkit + Persist | Latest | ✅ Production |
 | Real-time | Socket.io-client | 4.8.1 | ✅ Production |
@@ -134,6 +137,61 @@
 | @golf/shared-types | Type definitions, constants, validators | ✅ Complete |
 | Error Codes | Standardized error handling | ✅ Complete |
 | Data Models | 50+ interfaces for all entities | ✅ Complete |
+
+---
+
+## 🚀 Development Environment Setup
+
+### Environment Status (2025-01-12)
+
+#### ✅ Successfully Configured
+- **Database Services**: PostgreSQL 16 + PostGIS, Redis 7-alpine running via Docker Compose
+- **Mobile Development**: React Native Metro bundler running on port 8081
+- **Dependencies**: All mobile and backend dependencies installed
+- **Node.js Runtime**: v22.16.0 compatible with optimized package versions
+
+#### 🔧 Key Compatibility Findings
+
+**React Native CLI Version Compatibility Issue:**
+- **Problem**: React Native CLI v17.0.0+ has breaking changes causing "Cannot read properties of undefined (reading 'handle')" error with Node.js 22.x
+- **Root Cause**: Connect middleware compatibility issue in Metro integration
+- **Solution**: Use React Native CLI v16.0.3 (latest compatible version)
+- **Testing Results**:
+  - ❌ v19.1.0 (latest) - Connect middleware error
+  - ❌ v18.0.0 - Same error  
+  - ❌ v17.0.0 - Same error
+  - ✅ v16.0.3 - Works perfectly
+
+**Optimal Development Stack:**
+```json
+{
+  "@react-native-community/cli": "16.0.3",
+  "metro": "0.82.5",
+  "@react-native/metro-config": "0.81.0-rc.0",
+  "react-native": "0.76.9"
+}
+```
+
+#### 🔄 Running Services
+- **PostgreSQL**: localhost:5432 (user: golfuser, db: golfdb)
+- **Redis**: localhost:6379
+- **Metro Bundler**: localhost:8081
+- **Backend**: Pending (Prisma schema validation errors)
+
+#### ⚠️ Known Issues
+1. **Backend Server**: Prisma schema has 8 validation errors preventing startup
+2. **Missing Dependencies**: Backend needed `tsconfig-paths` package for TypeScript path resolution
+
+#### 📋 Environment Setup Checklist
+- [x] Docker and Docker Compose installed
+- [x] Node.js 22.16.0 and npm 11.4.2 verified
+- [x] PostgreSQL and Redis containers running
+- [x] Mobile dependencies installed with compatible versions
+- [x] Backend dependencies installed
+- [x] Environment variables configured (.env files)
+- [x] Metro bundler running successfully
+- [ ] Backend server running (blocked by Prisma schema)
+- [ ] End-to-end connectivity test
 
 ---
 
