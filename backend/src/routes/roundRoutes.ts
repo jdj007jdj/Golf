@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '../middleware/validateRequest';
@@ -7,18 +7,42 @@ import { body, param, query } from 'express-validator';
 const router = Router();
 const prisma = new PrismaClient();
 
+/**
+ * GET / - List rounds for authenticated user with optional status filtering
+ * Status logic: finishedAt = null (active), finishedAt = date (completed)
+ */
 router.get('/', authMiddleware, [
-  query('status').optional().isIn(['active', 'completed', 'abandoned']).withMessage('Invalid status')
-], validateRequest, async (req, res) => {
+  query('status').optional().isIn(['active', 'completed']).withMessage('Invalid status')
+], validateRequest, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const { status } = req.query;
 
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    // Build where clause based on status
+    let whereClause: any = {
+      participants: {
+        some: {
+          userId: userId
+        }
+      }
+    };
+
+    // Convert status to finishedAt logic
+    if (status === 'active') {
+      whereClause.finishedAt = null;
+    } else if (status === 'completed') {
+      whereClause.finishedAt = { not: null };
+    }
+
     const rounds = await prisma.round.findMany({
-      where: {
-        playerId: userId,
-        ...(status && { status: status as string })
-      },
+      where: whereClause,
       include: {
         course: {
           select: {
@@ -27,18 +51,22 @@ router.get('/', authMiddleware, [
             location: true
           }
         },
-        scores: {
+        participants: {
           include: {
-            hole: {
-              select: {
-                number: true,
-                par: true,
-                name: true
+            holeScores: {
+              include: {
+                hole: {
+                  select: {
+                    holeNumber: true,
+                    par: true,
+                    handicapIndex: true
+                  }
+                }
+              },
+              orderBy: {
+                hole: { holeNumber: 'asc' }
               }
             }
-          },
-          orderBy: {
-            hole: { number: 'asc' }
           }
         }
       },
@@ -60,38 +88,56 @@ router.get('/', authMiddleware, [
   }
 });
 
+/**
+ * GET /:id - Get specific round with full details
+ */
 router.get('/:id', authMiddleware, [
   param('id').isUUID().withMessage('Invalid round ID')
-], validateRequest, async (req, res) => {
+], validateRequest, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
 
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
     const round = await prisma.round.findFirst({
       where: {
         id,
-        playerId: userId
+        participants: {
+          some: {
+            userId: userId
+          }
+        }
       },
       include: {
         course: {
           include: {
             holes: {
-              orderBy: { number: 'asc' }
+              orderBy: { holeNumber: 'asc' }
             }
           }
         },
-        scores: {
+        participants: {
           include: {
-            hole: {
-              select: {
-                number: true,
-                par: true,
-                name: true
+            holeScores: {
+              include: {
+                hole: {
+                  select: {
+                    holeNumber: true,
+                    par: true,
+                    handicapIndex: true
+                  }
+                }
+              },
+              orderBy: {
+                hole: { holeNumber: 'asc' }
               }
             }
-          },
-          orderBy: {
-            hole: { number: 'asc' }
           }
         }
       }
@@ -104,9 +150,24 @@ router.get('/:id', authMiddleware, [
       });
     }
 
+    // Calculate round statistics
+    const participants = round.participants || [];
+    const holeScores = participants[0]?.holeScores || [];
+    const totalStrokes = holeScores.reduce((sum: number, score: any) => sum + score.score, 0);
+    const totalPar = holeScores.reduce((sum: number, score: any) => sum + score.hole.par, 0);
+    const scoreToPar = totalStrokes - totalPar;
+
     res.json({
       success: true,
-      data: round
+      data: {
+        ...round,
+        stats: {
+          totalStrokes,
+          totalPar,
+          scoreToPar,
+          holesCompleted: holeScores.length
+        }
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -117,14 +178,25 @@ router.get('/:id', authMiddleware, [
   }
 });
 
+/**
+ * POST / - Create new round with participant
+ */
 router.post('/', authMiddleware, [
   body('courseId').isUUID().withMessage('Valid course ID is required'),
-  body('tees').optional().isString().withMessage('Tees must be a string')
-], validateRequest, async (req, res) => {
+  body('teeBoxId').isUUID().withMessage('Valid tee box ID is required')
+], validateRequest, async (req: Request, res: Response) => {
   try {
-    const { courseId, tees } = req.body;
+    const { courseId, teeBoxId } = req.body;
     const userId = req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
 
+    // Verify course exists
     const course = await prisma.course.findUnique({
       where: { id: courseId },
       include: { holes: true }
@@ -137,13 +209,30 @@ router.post('/', authMiddleware, [
       });
     }
 
+    // Verify tee box exists
+    const teeBox = await prisma.teeBox.findUnique({
+      where: { id: teeBoxId }
+    });
+
+    if (!teeBox) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tee box not found'
+      });
+    }
+
+    // Create round with participant
     const round = await prisma.round.create({
       data: {
-        playerId: userId!,
         courseId,
-        tees: tees || 'Regular',
-        status: 'active',
-        startedAt: new Date()
+        teeBoxId,
+        startedAt: new Date(),
+        participants: {
+          create: {
+            userId: userId,
+            teeBoxId: teeBoxId
+          }
+        }
       },
       include: {
         course: {
@@ -152,6 +241,18 @@ router.post('/', authMiddleware, [
             name: true,
             location: true
           }
+        },
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
         }
       }
     });
@@ -159,29 +260,44 @@ router.post('/', authMiddleware, [
     res.status(201).json({
       success: true,
       data: round,
-      message: 'Round started successfully'
+      message: 'Round created successfully'
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Failed to start round',
+      message: 'Failed to create round',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
 
+/**
+ * PUT /:id/complete - Complete a round
+ */
 router.put('/:id/complete', authMiddleware, [
   param('id').isUUID().withMessage('Invalid round ID')
-], validateRequest, async (req, res) => {
+], validateRequest, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
 
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    // Verify round exists and user is participant
     const existingRound = await prisma.round.findFirst({
       where: {
         id,
-        playerId: userId,
-        status: 'active'
+        participants: {
+          some: {
+            userId: userId
+          }
+        },
+        finishedAt: null // Only allow completing active rounds
       }
     });
 
@@ -195,8 +311,7 @@ router.put('/:id/complete', authMiddleware, [
     const round = await prisma.round.update({
       where: { id },
       data: {
-        status: 'completed',
-        completedAt: new Date()
+        finishedAt: new Date()
       },
       include: {
         course: {
@@ -206,37 +321,30 @@ router.put('/:id/complete', authMiddleware, [
             location: true
           }
         },
-        scores: {
+        participants: {
           include: {
-            hole: {
-              select: {
-                number: true,
-                par: true,
-                name: true
+            holeScores: {
+              include: {
+                hole: {
+                  select: {
+                    holeNumber: true,
+                    par: true,
+                    handicapIndex: true
+                  }
+                }
+              },
+              orderBy: {
+                hole: { holeNumber: 'asc' }
               }
             }
-          },
-          orderBy: {
-            hole: { number: 'asc' }
           }
         }
       }
     });
 
-    const totalStrokes = round.scores.reduce((sum, score) => sum + score.strokes, 0);
-    const totalPar = round.scores.reduce((sum, score) => sum + score.hole.par, 0);
-    const scoreToPar = totalStrokes - totalPar;
-
     res.json({
       success: true,
-      data: {
-        ...round,
-        summary: {
-          totalStrokes,
-          totalPar,
-          scoreToPar
-        }
-      },
+      data: round,
       message: 'Round completed successfully'
     });
   } catch (error) {
@@ -248,18 +356,33 @@ router.put('/:id/complete', authMiddleware, [
   }
 });
 
+/**
+ * PUT /:id/abandon - Abandon a round
+ */
 router.put('/:id/abandon', authMiddleware, [
   param('id').isUUID().withMessage('Invalid round ID')
-], validateRequest, async (req, res) => {
+], validateRequest, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
 
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    // Verify round exists and user is participant
     const existingRound = await prisma.round.findFirst({
       where: {
         id,
-        playerId: userId,
-        status: 'active'
+        participants: {
+          some: {
+            userId: userId
+          }
+        },
+        finishedAt: null // Only allow abandoning active rounds
       }
     });
 
@@ -273,7 +396,7 @@ router.put('/:id/abandon', authMiddleware, [
     await prisma.round.update({
       where: { id },
       data: {
-        status: 'abandoned'
+        finishedAt: new Date() // Mark as finished (abandoned rounds are just finished early)
       }
     });
 
@@ -290,22 +413,37 @@ router.put('/:id/abandon', authMiddleware, [
   }
 });
 
+/**
+ * POST /:roundId/scores - Add or update hole score
+ */
 router.post('/:roundId/scores', authMiddleware, [
   param('roundId').isUUID().withMessage('Invalid round ID'),
   body('holeId').isUUID().withMessage('Valid hole ID is required'),
   body('strokes').isInt({ min: 1, max: 15 }).withMessage('Strokes must be between 1-15'),
   body('putts').optional().isInt({ min: 0, max: 10 }).withMessage('Putts must be between 0-10')
-], validateRequest, async (req, res) => {
+], validateRequest, async (req: Request, res: Response) => {
   try {
     const { roundId } = req.params;
     const { holeId, strokes, putts } = req.body;
     const userId = req.user?.id;
 
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    // Verify round exists and is active
     const round = await prisma.round.findFirst({
       where: {
         id: roundId,
-        playerId: userId,
-        status: 'active'
+        participants: {
+          some: {
+            userId: userId
+          }
+        },
+        finishedAt: null
       }
     });
 
@@ -316,6 +454,7 @@ router.post('/:roundId/scores', authMiddleware, [
       });
     }
 
+    // Verify hole exists for this course
     const hole = await prisma.hole.findFirst({
       where: {
         id: holeId,
@@ -330,29 +469,47 @@ router.post('/:roundId/scores', authMiddleware, [
       });
     }
 
-    const score = await prisma.score.upsert({
+    // Find the round participant for this user and round
+    const participant = await prisma.roundParticipant.findFirst({
       where: {
-        roundId_holeId: {
-          roundId,
+        roundId,
+        userId
+      }
+    });
+
+    if (!participant) {
+      return res.status(404).json({
+        success: false,
+        message: 'Round participant not found'
+      });
+    }
+
+    // Upsert hole score using correct unique constraint
+    const score = await prisma.holeScore.upsert({
+      where: {
+        roundParticipantId_holeId: {
+          roundParticipantId: participant.id,
           holeId
         }
       },
       update: {
-        strokes,
-        putts
+        score: strokes,
+        putts,
+        updatedBy: userId
       },
       create: {
-        roundId,
+        roundParticipantId: participant.id,
         holeId,
-        strokes,
-        putts
+        score: strokes,
+        putts,
+        updatedBy: userId
       },
       include: {
         hole: {
           select: {
-            number: true,
+            holeNumber: true,
             par: true,
-            name: true
+            handicapIndex: true
           }
         }
       }
@@ -361,12 +518,12 @@ router.post('/:roundId/scores', authMiddleware, [
     res.json({
       success: true,
       data: score,
-      message: 'Score saved successfully'
+      message: 'Score updated successfully'
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Failed to save score',
+      message: 'Failed to update score',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }

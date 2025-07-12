@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '../middleware/validateRequest';
@@ -7,12 +7,12 @@ import { body, param } from 'express-validator';
 const router = Router();
 const prisma = new PrismaClient();
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
     const courses = await prisma.course.findMany({
       include: {
         holes: {
-          orderBy: { number: 'asc' }
+          orderBy: { holeNumber: 'asc' }
         },
         _count: {
           select: { rounds: true }
@@ -35,14 +35,14 @@ router.get('/', authMiddleware, async (req, res) => {
 
 router.get('/:id', authMiddleware, [
   param('id').isUUID().withMessage('Invalid course ID')
-], validateRequest, async (req, res) => {
+], validateRequest, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const course = await prisma.course.findUnique({
       where: { id },
       include: {
         holes: {
-          orderBy: { number: 'asc' }
+          orderBy: { holeNumber: 'asc' }
         }
       }
     });
@@ -74,7 +74,7 @@ router.post('/', authMiddleware, [
   body('holes.*.number').isInt({ min: 1, max: 18 }).withMessage('Hole number must be between 1-18'),
   body('holes.*.par').isInt({ min: 3, max: 6 }).withMessage('Par must be between 3-6'),
   body('holes.*.name').optional().trim()
-], validateRequest, async (req, res) => {
+], validateRequest, async (req: Request, res: Response) => {
   try {
     const { name, location, holes } = req.body;
     const userId = req.user?.id;
@@ -94,7 +94,7 @@ router.post('/', authMiddleware, [
       },
       include: {
         holes: {
-          orderBy: { number: 'asc' }
+          orderBy: { holeNumber: 'asc' }
         }
       }
     });
@@ -117,7 +117,7 @@ router.put('/:id', authMiddleware, [
   param('id').isUUID().withMessage('Invalid course ID'),
   body('name').optional().trim().isLength({ min: 1 }).withMessage('Course name cannot be empty'),
   body('location').optional().trim()
-], validateRequest, async (req, res) => {
+], validateRequest, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, location } = req.body;
@@ -149,7 +149,7 @@ router.put('/:id', authMiddleware, [
       },
       include: {
         holes: {
-          orderBy: { number: 'asc' }
+          orderBy: { holeNumber: 'asc' }
         }
       }
     });
@@ -170,7 +170,7 @@ router.put('/:id', authMiddleware, [
 
 router.delete('/:id', authMiddleware, [
   param('id').isUUID().withMessage('Invalid course ID')
-], validateRequest, async (req, res) => {
+], validateRequest, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;

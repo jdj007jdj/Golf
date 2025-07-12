@@ -10,12 +10,12 @@ import { config } from './config';
 /**
  * Redis client instance
  */
-let redisClient: RedisClientType | null = null;
+let redisClient: any = null;
 
 /**
  * Create Redis client
  */
-function createRedisClient(): RedisClientType {
+function createRedisClient(): any {
   let clientConfig: any = {};
 
   if (config.redisUrl) {
@@ -94,7 +94,7 @@ export async function disconnectRedis(): Promise<void> {
 /**
  * Get Redis client
  */
-export function getRedisClient(): RedisClientType {
+export function getRedisClient(): any {
   if (!redisClient) {
     throw new Error('Redis client not initialized. Call connectRedis() first.');
   }
@@ -122,7 +122,7 @@ export async function checkRedisHealth(): Promise<boolean> {
  * Cache utility functions
  */
 export class CacheService {
-  private client: RedisClientType;
+  private client: any;
 
   constructor() {
     this.client = getRedisClient();

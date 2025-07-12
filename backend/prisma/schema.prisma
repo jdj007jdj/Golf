@@ -29,15 +29,18 @@ model User {
 
   // Relations
   homeCourse        Course? @relation("UserHomeCourse", fields: [homeCourseId], references: [id])
-  clubs             UserClub[]
-  friendships       Friendship[] @relation("UserFriendships")
-  friendOf          Friendship[] @relation("FriendOfUser")
-  roundParticipants RoundParticipant[]
-  createdCourses    Course[] @relation("CourseCreator")
-  holeScores        HoleScore[]
-  shots             Shot[]
-  syncQueue         SyncQueue[]
-  resolvedConflicts SyncConflict[]
+  clubs                UserClub[]
+  friendships          Friendship[] @relation("UserFriendships")
+  friendOf             Friendship[] @relation("FriendOfUser")
+  roundParticipants    RoundParticipant[]
+  createdCourses       Course[] @relation("CourseCreator")
+  holeScores           HoleScore[]
+  shots                Shot[]
+  syncQueue            SyncQueue[]
+  resolvedConflicts    SyncConflict[]
+  createdFeatures      CourseFeature[] @relation("FeatureCreator")
+  recordedPinPositions PinPosition[] @relation("PinRecorder")
+  clubPerformances     ClubPerformance[] @relation("UserClubPerformance")
 
   @@map("users")
 }
@@ -69,8 +72,9 @@ model UserClub {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shots Shot[]
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shots        Shot[]
+  performances ClubPerformance[] @relation("ClubPerformance")
 
   @@map("user_clubs")
 }
@@ -98,9 +102,8 @@ model Course {
   creator    User?     @relation("CourseCreator", fields: [createdBy], references: [id])
   homeUsers  User[]    @relation("UserHomeCourse")
   teeBoxes   TeeBox[]
-  holes      Hole[]
-  features   CourseFeature[]
-  rounds     Round[]
+  holes             Hole[]
+  rounds            Round[]
 
   @@map("courses")
 }
@@ -133,12 +136,13 @@ model Hole {
   createdAt      DateTime @default(now()) @map("created_at")
 
   // Relations
-  course      Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  holeTees    HoleTee[]
-  features    CourseFeature[]
-  pinPositions PinPosition[]
-  holeScores  HoleScore[]
-  shots       Shot[]
+  course           Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  holeTees         HoleTee[]
+  features         CourseFeature[]        @relation("HoleFeatures")
+  pinPositions     PinPosition[]
+  holeScores       HoleScore[]
+  shots            Shot[]
+  recommendations  CourseRecommendation[] @relation("HoleRecommendations")
 
   @@unique([courseId, holeNumber])
   @@map("holes")
@@ -173,8 +177,8 @@ model CourseFeature {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   // Relations
-  hole    Hole  @relation(fields: [holeId], references: [id], onDelete: Cascade)
-  creator User? @relation(fields: [createdBy], references: [id])
+  hole    Hole  @relation("HoleFeatures", fields: [holeId], references: [id], onDelete: Cascade)
+  creator User? @relation("FeatureCreator", fields: [createdBy], references: [id])
 
   @@map("course_features")
 }
@@ -190,7 +194,7 @@ model PinPosition {
 
   // Relations
   hole     Hole  @relation(fields: [holeId], references: [id], onDelete: Cascade)
-  recorder User? @relation(fields: [recordedBy], references: [id])
+  recorder User? @relation("PinRecorder", fields: [recordedBy], references: [id])
 
   @@map("pin_positions")
 }
@@ -230,7 +234,7 @@ model RoundParticipant {
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   teeBox     TeeBox      @relation(fields: [teeBoxId], references: [id])
   holeScores HoleScore[]
-  shots      Shot[]
+  shots      Shot[]      @relation("ParticipantShots")
 
   @@unique([roundId, userId])
   @@map("round_participants")
@@ -277,10 +281,10 @@ model Shot {
   createdAt          DateTime @default(now()) @map("created_at")
 
   // Relations
-  roundParticipant RoundParticipant @relation(fields: [roundParticipantId], references: [id], onDelete: Cascade)
+  roundParticipant RoundParticipant @relation("ParticipantShots", fields: [roundParticipantId], references: [id], onDelete: Cascade)
   hole             Hole             @relation(fields: [holeId], references: [id])
   club             UserClub?        @relation(fields: [clubId], references: [id])
-  user             User             @relation(fields: [roundParticipantId], references: [id])
+  user             User             @relation(fields: [roundParticipantId], references: [id], map: "shots_user_fkey")
 
   @@map("shots")
 }
@@ -332,8 +336,8 @@ model ClubPerformance {
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   // Relations
-  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  club UserClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User     @relation("UserClubPerformance", fields: [userId], references: [id], onDelete: Cascade)
+  club UserClub @relation("ClubPerformance", fields: [clubId], references: [id], onDelete: Cascade)
 
   @@map("club_performance")
 }
@@ -351,7 +355,7 @@ model CourseRecommendation {
   createdAt        DateTime @default(now()) @map("created_at")
 
   // Relations
-  hole Hole @relation(fields: [holeId], references: [id], onDelete: Cascade)
+  hole Hole @relation("HoleRecommendations", fields: [holeId], references: [id], onDelete: Cascade)
 
   @@map("course_recommendations")
 }

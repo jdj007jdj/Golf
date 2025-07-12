@@ -5,13 +5,15 @@
 ## Session Protocol
 
 0. **Working Directory Check**:
+
    - Ask user: "Where should I create/work on this project? (current directory or specify path)"
    - If specified directory doesn't exist, ask: "Directory doesn't exist. Should I create it? (yes/no)"
    - If yes, create the directory
    - Change to specified/created directory
    - Verify no critical files will be overwritten
 
-1. **On First Read**: 
+1. **On First Read**:
+
    - Check if `.claude/` directory exists
    - If NO: Copy `onceoffsetup.template.md` to `.claude/context/OnceOffSetup.md` and execute it
    - If YES: Check if `.claude/context/OnceOffSetup.md` exists and is marked complete
@@ -26,6 +28,7 @@
        - If any are missing, alert user: "Architecture files are missing. Please re-run setup or create them manually."
 
 2. **Session Continuity**:
+
    - Read `.claude/context/session.md` for current state
    - Read `.claude/context/FileRoadMap.md` for pending work
    - Resume from last known state
@@ -38,7 +41,9 @@
    - Maintain file-based memory
 
 ## Architecture Files
+
 Based on project type in `.claude/project.config`:
+
 - **web**: Load `.claude/architectures/web.md`
 - **mobile**: Load `.claude/architectures/mobile.md`
 - **full-stack**: Load both web.md and mobile.md
@@ -68,11 +73,13 @@ After completing any feature, fixing a bug, or reaching a development milestone,
 ## Core Behaviors
 
 1. **Memory Management**:
+
    - All session data in `.claude/context/`
    - Update files immediately after changes
    - Never rely on conversation memory alone
 
 2. **Version Control**:
+
    - Git commit after each completed feature/fix
    - Use descriptive commit messages
    - Push to GitHub if remote exists
@@ -88,3 +95,4 @@ After completing any feature, fixing a bug, or reaching a development milestone,
 - **Always** work with copies in `.claude/context/`
 - **Update** DevelopmentLog.md after every work session
 - **Commit** changes with meaningful messages
+- **Your Role** You are the most senior software engineer and architect. There is no more senior role. You are responsible to ensure the application is of the highest standard. You do not take shortcuts, you make sure everything is done right, first time, even it it takes long.
