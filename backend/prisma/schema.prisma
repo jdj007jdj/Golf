@@ -1,0 +1,357 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User models
+model User {
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String   @unique
+  username        String   @unique
+  passwordHash    String   @map("password_hash")
+  firstName       String?  @map("first_name")
+  lastName        String?  @map("last_name")
+  handicap        Float?
+  profileImageUrl String?  @map("profile_image_url")
+  homeCourseId    String?  @map("home_course_id") @db.Uuid
+  preferences     Json     @default("{}")
+  subscriptionTier String  @default("free") @map("subscription_tier")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  lastSyncAt      DateTime? @map("last_sync_at")
+
+  // Relations
+  homeCourse        Course? @relation("UserHomeCourse", fields: [homeCourseId], references: [id])
+  clubs             UserClub[]
+  friendships       Friendship[] @relation("UserFriendships")
+  friendOf          Friendship[] @relation("FriendOfUser")
+  roundParticipants RoundParticipant[]
+  createdCourses    Course[] @relation("CourseCreator")
+  holeScores        HoleScore[]
+  shots             Shot[]
+  syncQueue         SyncQueue[]
+  resolvedConflicts SyncConflict[]
+
+  @@map("users")
+}
+
+model Friendship {
+  id       String @id @default(uuid()) @db.Uuid
+  userId   String @map("user_id") @db.Uuid
+  friendId String @map("friend_id") @db.Uuid
+  status   String @default("pending") // pending, accepted, blocked
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user   User @relation("UserFriendships", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendOfUser", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@map("friendships")
+}
+
+model UserClub {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  clubType    String   @map("club_type") // driver, 3wood, etc.
+  brand       String?
+  model       String?
+  shaftType   String?  @map("shaft_type") // regular, stiff, x-stiff
+  avgDistance Float?   @map("avg_distance")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shots Shot[]
+
+  @@map("user_clubs")
+}
+
+// Course models
+model Course {
+  id         String  @id @default(uuid()) @db.Uuid
+  name       String
+  address    String?
+  city       String?
+  state      String? @map("state_province")
+  country    String?
+  postalCode String? @map("postal_code")
+  phone      String?
+  website    String?
+  // PostGIS geography point (lat, lng)
+  location   String? // Will store as "POINT(lng lat)"
+  timezone   String?
+  isVerified Boolean @default(false) @map("is_verified")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdBy  String? @map("created_by") @db.Uuid
+
+  // Relations
+  creator    User?     @relation("CourseCreator", fields: [createdBy], references: [id])
+  homeUsers  User[]    @relation("UserHomeCourse")
+  teeBoxes   TeeBox[]
+  holes      Hole[]
+  features   CourseFeature[]
+  rounds     Round[]
+
+  @@map("courses")
+}
+
+model TeeBox {
+  id         String @id @default(uuid()) @db.Uuid
+  courseId   String @map("course_id") @db.Uuid
+  name       String
+  color      String?
+  rating     Float?
+  slope      Int?
+  totalYards Int?   @map("total_yards")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  course            Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  holeTees          HoleTee[]
+  rounds            Round[]
+  roundParticipants RoundParticipant[]
+
+  @@map("tee_boxes")
+}
+
+model Hole {
+  id             String @id @default(uuid()) @db.Uuid
+  courseId       String @map("course_id") @db.Uuid
+  holeNumber     Int    @map("hole_number")
+  par            Int
+  handicapIndex  Int?   @map("handicap_index")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  course      Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  holeTees    HoleTee[]
+  features    CourseFeature[]
+  pinPositions PinPosition[]
+  holeScores  HoleScore[]
+  shots       Shot[]
+
+  @@unique([courseId, holeNumber])
+  @@map("holes")
+}
+
+model HoleTee {
+  id           String @id @default(uuid()) @db.Uuid
+  holeId       String @map("hole_id") @db.Uuid
+  teeBoxId     String @map("tee_box_id") @db.Uuid
+  distanceYards Int   @map("distance_yards")
+
+  // Relations
+  hole   Hole   @relation(fields: [holeId], references: [id], onDelete: Cascade)
+  teeBox TeeBox @relation(fields: [teeBoxId], references: [id], onDelete: Cascade)
+
+  @@unique([holeId, teeBoxId])
+  @@map("hole_tees")
+}
+
+model CourseFeature {
+  id             String   @id @default(uuid()) @db.Uuid
+  holeId         String   @map("hole_id") @db.Uuid
+  featureType    String   @map("feature_type") // green, bunker, water, etc.
+  name           String?
+  // PostGIS polygon for feature boundary
+  boundary       String?  // Will store as polygon geometry
+  // PostGIS point for center
+  centerPoint    String?  @map("center_point") // Will store as "POINT(lng lat)"
+  createdBy      String?  @map("created_by") @db.Uuid
+  confidenceScore Float   @default(0.5) @map("confidence_score")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  hole    Hole  @relation(fields: [holeId], references: [id], onDelete: Cascade)
+  creator User? @relation(fields: [createdBy], references: [id])
+
+  @@map("course_features")
+}
+
+model PinPosition {
+  id         String   @id @default(uuid()) @db.Uuid
+  holeId     String   @map("hole_id") @db.Uuid
+  // PostGIS point for pin position
+  position   String   // Will store as "POINT(lng lat)"
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  recordedBy String?  @map("recorded_by") @db.Uuid
+  isActive   Boolean  @default(true) @map("is_active")
+
+  // Relations
+  hole     Hole  @relation(fields: [holeId], references: [id], onDelete: Cascade)
+  recorder User? @relation(fields: [recordedBy], references: [id])
+
+  @@map("pin_positions")
+}
+
+// Round and scoring models
+model Round {
+  id                String   @id @default(uuid()) @db.Uuid
+  courseId          String   @map("course_id") @db.Uuid
+  teeBoxId          String   @map("tee_box_id") @db.Uuid
+  startedAt         DateTime @map("started_at")
+  finishedAt        DateTime? @map("finished_at")
+  weatherConditions Json?    @map("weather_conditions")
+  walkingRiding     String   @default("walking") @map("walking_riding") // walking, riding
+  roundType         String   @default("casual") @map("round_type") // casual, tournament, practice
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  course       Course             @relation(fields: [courseId], references: [id])
+  teeBox       TeeBox             @relation(fields: [teeBoxId], references: [id])
+  participants RoundParticipant[]
+
+  @@map("rounds")
+}
+
+model RoundParticipant {
+  id              String @id @default(uuid()) @db.Uuid
+  roundId         String @map("round_id") @db.Uuid
+  userId          String @map("user_id") @db.Uuid
+  isScorer        Boolean @default(false) @map("is_scorer")
+  playingHandicap Int?   @map("playing_handicap")
+  teeBoxId        String @map("tee_box_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  round      Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teeBox     TeeBox      @relation(fields: [teeBoxId], references: [id])
+  holeScores HoleScore[]
+  shots      Shot[]
+
+  @@unique([roundId, userId])
+  @@map("round_participants")
+}
+
+model HoleScore {
+  id                  String   @id @default(uuid()) @db.Uuid
+  roundParticipantId  String   @map("round_participant_id") @db.Uuid
+  holeId              String   @map("hole_id") @db.Uuid
+  score               Int
+  putts               Int?
+  fairwayHit          Boolean? @map("fairway_hit")
+  greenInRegulation   Boolean? @map("green_in_regulation")
+  penalties           Int      @default(0)
+  sandSaves           Int      @default(0) @map("sand_saves")
+  upAndDowns          Boolean? @map("up_and_downs")
+  updatedBy           String   @map("updated_by") @db.Uuid
+  syncConflictData    Json?    @map("sync_conflict_data")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  roundParticipant RoundParticipant @relation(fields: [roundParticipantId], references: [id], onDelete: Cascade)
+  hole             Hole             @relation(fields: [holeId], references: [id])
+  updater          User             @relation(fields: [updatedBy], references: [id])
+
+  @@unique([roundParticipantId, holeId])
+  @@map("hole_scores")
+}
+
+model Shot {
+  id                 String   @id @default(uuid()) @db.Uuid
+  roundParticipantId String   @map("round_participant_id") @db.Uuid
+  holeId             String   @map("hole_id") @db.Uuid
+  shotNumber         Int      @map("shot_number")
+  clubId             String?  @map("club_id") @db.Uuid
+  // PostGIS points for shot positions
+  startPosition      String   @map("start_position") // "POINT(lng lat)"
+  endPosition        String   @map("end_position") // "POINT(lng lat)"
+  distanceYards      Float    @map("distance_yards")
+  shotShape          String?  @map("shot_shape") // straight, draw, fade, etc.
+  lieType            String   @map("lie_type") // tee, fairway, rough, etc.
+  shotType           String   @map("shot_type") // full, pitch, chip, etc.
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  // Relations
+  roundParticipant RoundParticipant @relation(fields: [roundParticipantId], references: [id], onDelete: Cascade)
+  hole             Hole             @relation(fields: [holeId], references: [id])
+  club             UserClub?        @relation(fields: [clubId], references: [id])
+  user             User             @relation(fields: [roundParticipantId], references: [id])
+
+  @@map("shots")
+}
+
+// Sync and conflict management
+model SyncQueue {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  deviceId     String    @map("device_id")
+  tableName    String    @map("table_name")
+  operation    String    // insert, update, delete
+  recordId     String    @map("record_id") @db.Uuid
+  data         Json
+  createdAt    DateTime  @default(now()) @map("created_at")
+  syncedAt     DateTime? @map("synced_at")
+  conflictResolved Boolean @default(false) @map("conflict_resolved")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("sync_queue")
+}
+
+model SyncConflict {
+  id               String    @id @default(uuid()) @db.Uuid
+  tableName        String    @map("table_name")
+  recordId         String    @map("record_id") @db.Uuid
+  conflictingData  Json      @map("conflicting_data")
+  resolutionMethod String?   @map("resolution_method") // auto_latest, auto_consensus, manual
+  resolvedData     Json?     @map("resolved_data")
+  resolvedAt       DateTime? @map("resolved_at")
+  resolvedBy       String?   @map("resolved_by") @db.Uuid
+
+  // Relations
+  resolver User? @relation(fields: [resolvedBy], references: [id])
+
+  @@map("sync_conflicts")
+}
+
+// Analytics and ML
+model ClubPerformance {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @map("user_id") @db.Uuid
+  clubId               String   @map("club_id") @db.Uuid
+  conditions           Json? // wind, temp, elevation
+  avgDistance          Float    @map("avg_distance")
+  accuracyPercentage   Float    @map("accuracy_percentage")
+  sampleSize           Int      @map("sample_size")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club UserClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@map("club_performance")
+}
+
+model CourseRecommendation {
+  id               String   @id @default(uuid()) @db.Uuid
+  holeId           String   @map("hole_id") @db.Uuid
+  // PostGIS point for position
+  fromPosition     String   @map("from_position") // "POINT(lng lat)"
+  toTarget         String   @map("to_target") // green_center, layup_point, etc.
+  distanceYards    Float    @map("distance_yards")
+  recommendedClub  String   @map("recommended_club")
+  confidenceScore  Float    @map("confidence_score")
+  factors          Json? // wind, elevation, hazards considered
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  // Relations
+  hole Hole @relation(fields: [holeId], references: [id], onDelete: Cascade)
+
+  @@map("course_recommendations")
+}

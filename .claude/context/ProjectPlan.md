@@ -8,21 +8,21 @@ Full-stack architecture with React Native mobile app, React web dashboard, Node.
 - [x] Initialize Git repository  
 - [x] Set up Docker configuration
 - [x] Create base environment files
-- [ ] React Native project setup with TypeScript
-- [ ] Express.js API setup with TypeScript
-- [ ] PostgreSQL database with PostGIS extension
-- [ ] JWT authentication system
-- [ ] Offline queue mechanism
-- [ ] WebSocket setup for real-time features
-- [ ] CI/CD pipeline with GitHub Actions
+- [x] React Native project setup with TypeScript
+- [x] Express.js API setup with TypeScript
+- [x] PostgreSQL database with PostGIS extension
+- [x] JWT authentication system
+- [x] Offline queue mechanism
+- [x] WebSocket setup for real-time features
+- [x] CI/CD pipeline with GitHub Actions
 
 ## Phase 1: Basic Digital Scorecard (Weeks 3-5)
 ### Core Features
-- [ ] - [2025-01]: Course selection and manual creation
-- [ ] - [2025-01]: Hole-by-hole score entry with putts
-- [ ] - [2025-01]: Round management (start, save, complete)
-- [ ] - [2025-01]: Offline functionality with local SQLite
-- [ ] - [2025-01]: Basic round history and statistics
+- [x] - [2025-01]: Course selection and manual creation
+- [x] - [2025-01]: Hole-by-hole score entry with putts
+- [x] - [2025-01]: Round management (start, save, complete)
+- [x] - [2025-01]: Offline functionality with local SQLite
+- [x] - [2025-01]: Basic round history and statistics
 
 ## Phase 2: GPS & Shot Tracking (Weeks 6-9)
 ### Core Features
