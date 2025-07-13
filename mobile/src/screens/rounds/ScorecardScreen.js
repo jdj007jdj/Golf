@@ -260,6 +260,14 @@ const ScorecardScreen = ({ route, navigation }) => {
   // Check if front 9, back 9, or all 18 holes are complete
   const front9Complete = holes.slice(0, 9).every(hole => scores[hole.holeNumber] > 0);
   const back9Complete = holes.slice(9, 18).every(hole => scores[hole.holeNumber] > 0);
+  
+  // Check if any holes have been played in each 9
+  const front9HasScores = holes.slice(0, 9).some(hole => scores[hole.holeNumber] > 0);
+  const back9HasScores = holes.slice(9, 18).some(hole => scores[hole.holeNumber] > 0);
+  
+  // Determine if we can finish and what type of finish is available
+  const canFinishFront9 = front9Complete && !back9HasScores; // Only if no back 9 scores entered
+  const canFinishBack9 = back9Complete && !front9HasScores; // Only if no front 9 scores entered
   const canFinishRound = front9Complete || back9Complete || isRoundComplete;
 
   const nextHole = () => {
@@ -280,10 +288,12 @@ const ScorecardScreen = ({ route, navigation }) => {
       roundType = 'Full Round (18 holes)';
     } else if (front9Complete && back9Complete) {
       roundType = 'Full Round (18 holes)';
-    } else if (front9Complete) {
+    } else if (canFinishFront9) {
       roundType = 'Front 9';
-    } else if (back9Complete) {
+    } else if (canFinishBack9) {
       roundType = 'Back 9';
+    } else {
+      roundType = 'Partial Round';
     }
 
     const totalCoursePar = isRoundComplete 
@@ -1060,8 +1070,8 @@ const ScorecardScreen = ({ route, navigation }) => {
               !isRoundComplete && styles.finishRoundButtonTextIncomplete
             ]}>
               {isRoundComplete ? 'Finish Full Round' : 
-               front9Complete && !back9Complete ? 'Finish Front 9' :
-               back9Complete && !front9Complete ? 'Finish Back 9' :
+               canFinishFront9 ? 'Finish Front 9' :
+               canFinishBack9 ? 'Finish Back 9' :
                'Finish Round'}
             </Text>
             <Text style={styles.finishRoundSubtext}>
