@@ -10,6 +10,10 @@ import RegisterScreen from '../screens/auth/RegisterScreen';
 
 // Main app screens
 import HomeScreen from '../screens/main/HomeScreen';
+import CourseListScreen from '../screens/courses/CourseListScreen';
+import CourseDetailsScreen from '../screens/courses/CourseDetailsScreen';
+import StartRoundScreen from '../screens/rounds/StartRoundScreen';
+import ScorecardScreen from '../screens/rounds/ScorecardScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -34,6 +38,10 @@ const MainStack = () => {
       }}
     >
       <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="CourseList" component={CourseListScreen} />
+      <Stack.Screen name="CourseDetails" component={CourseDetailsScreen} />
+      <Stack.Screen name="StartRound" component={StartRoundScreen} />
+      <Stack.Screen name="Scorecard" component={ScorecardScreen} />
     </Stack.Navigator>
   );
 };

@@ -14,6 +14,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
         holes: {
           orderBy: { holeNumber: 'asc' }
         },
+        teeBoxes: {
+          orderBy: { name: 'asc' }
+        },
         _count: {
           select: { rounds: true }
         }

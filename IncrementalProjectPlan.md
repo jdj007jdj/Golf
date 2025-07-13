@@ -228,6 +228,43 @@ Instead of building everything at once, we'll create a **working app** that gets
 
 ---
 
+### **⚙️ PHASE 1.6: USER SETTINGS & PREFERENCES** 
+*"Let users customize their experience"*
+
+#### **Step 1.6: Settings Implementation** ⏱️ 3-4 hours
+**Goal**: Users can configure app to their preferences
+**Testing**: Settings persist and affect app behavior
+
+- [ ] **1.6.1**: Settings screen UI
+  - Access from home screen or profile
+  - Organized settings categories
+  - Test: Settings screen is accessible and intuitive
+  
+- [ ] **1.6.2**: Measurement system preference
+  - Toggle between Metric (meters) and Imperial (yards)
+  - Convert all distances throughout app
+  - Test: Distance units change correctly everywhere
+  
+- [ ] **1.6.3**: User profile settings
+  - Edit name, email, handicap
+  - Default tee box preference
+  - Test: Profile updates save correctly
+  
+- [ ] **1.6.4**: App preferences
+  - Notification settings
+  - Theme preferences (prepare for dark mode)
+  - Default scoring options
+  - Test: Preferences affect app behavior
+
+- [ ] **1.6.5**: Data persistence
+  - Save settings to AsyncStorage
+  - Sync settings with backend
+  - Test: Settings persist across app restarts
+
+**Deliverable**: Fully functional settings system with metric/imperial conversion
+
+---
+
 ### **📊 PHASE 2: SCORE TRACKING & ANALYTICS** 
 *"Make the scorecard useful and engaging"*
 
@@ -236,9 +273,9 @@ Instead of building everything at once, we'll create a **working app** that gets
 **Testing**: Advanced scoring features work intuitively
 
 - [ ] **2.1.1**: Hole information display
-  - Par, yardage, hole description
+  - Par, distance (yards/meters based on user preference)
   - Hole difficulty/rating
-  - Test: Users see helpful hole information
+  - Test: Users see helpful hole information in their preferred units
   
 - [ ] **2.1.2**: Score entry improvements
   - Putts tracking separate from total score
@@ -335,8 +372,9 @@ Instead of building everything at once, we'll create a **working app** that gets
   
 - [ ] **3.1.4**: Distance measurements
   - Distance to pin, front/back of green
+  - Display in user's preferred units (yards/meters)
   - Distance calculations accuracy
-  - Test: Distance readings are helpful and accurate
+  - Test: Distance readings are helpful and accurate in both units
 
 **Deliverable**: Location-aware golf app with distance measurements
 

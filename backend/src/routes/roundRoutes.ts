@@ -179,14 +179,39 @@ router.get('/:id', authMiddleware, [
 });
 
 /**
+ * POST /test - Simple test endpoint
+ */
+router.post('/test', (req: Request, res: Response) => {
+  console.log('TEST POST endpoint hit!');
+  res.json({
+    success: true,
+    message: 'POST test works!',
+    body: req.body
+  });
+});
+
+/**
+ * POST /test-auth - Test authMiddleware in isolation
+ */
+router.post('/test-auth', authMiddleware, (req: Request, res: Response) => {
+  console.log('AUTH TEST POST endpoint hit!');
+  res.json({
+    success: true,
+    message: 'Auth test works!',
+    user: req.user?.id
+  });
+});
+
+/**
  * POST / - Create new round with participant
  */
-router.post('/', authMiddleware, [
-  body('courseId').isUUID().withMessage('Valid course ID is required'),
-  body('teeBoxId').isUUID().withMessage('Valid tee box ID is required')
-], validateRequest, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, async (req: Request, res: Response) => {
+  console.log('=== ROUNDS POST ROUTE HIT ===');
+  console.log('Request body:', req.body);
+  console.log('User ID:', req.user?.id);
+  
   try {
-    const { courseId, teeBoxId } = req.body;
+    const { courseId, teeBoxId, roundType = 'casual' } = req.body;
     const userId = req.user?.id;
     
     if (!userId) {
@@ -221,25 +246,37 @@ router.post('/', authMiddleware, [
       });
     }
 
-    // Create round with participant
+    // Create round first
     const round = await prisma.round.create({
       data: {
         courseId,
         teeBoxId,
+        roundType,
         startedAt: new Date(),
-        participants: {
-          create: {
-            userId: userId,
-            teeBoxId: teeBoxId
-          }
-        }
       },
+    });
+
+    // Then create participant
+    await prisma.roundParticipant.create({
+      data: {
+        roundId: round.id,
+        userId: userId!,
+        teeBoxId: teeBoxId,
+        isScorer: true
+      }
+    });
+
+    // Get complete round with relations
+    const completeRound = await prisma.round.findUnique({
+      where: { id: round.id },
       include: {
         course: {
           select: {
             id: true,
             name: true,
-            location: true
+            city: true,
+            state: true,
+            country: true
           }
         },
         participants: {
@@ -259,10 +296,10 @@ router.post('/', authMiddleware, [
 
     res.status(201).json({
       success: true,
-      data: round,
+      data: completeRound,
       message: 'Round created successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       success: false,
       message: 'Failed to create round',

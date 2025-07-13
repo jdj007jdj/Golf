@@ -24,10 +24,31 @@ const HomeScreen = ({ navigation }) => {
       </View>
       
       <View style={styles.content}>
-        <Text style={styles.placeholder}>Golf Tracker Home</Text>
-        <Text style={styles.info}>You are successfully logged in!</Text>
+        <Text style={styles.welcomeText}>Ready to play?</Text>
+        
+        <TouchableOpacity 
+          style={styles.primaryButton}
+          onPress={() => navigation.navigate('CourseList')}
+        >
+          <Text style={styles.primaryButtonText}>Start New Round</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.actionCard}>
+            <Text style={styles.actionTitle}>Round History</Text>
+            <Text style={styles.actionDescription}>View your past rounds</Text>
+            <Text style={styles.comingSoon}>Coming soon!</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.actionCard}>
+            <Text style={styles.actionTitle}>Statistics</Text>
+            <Text style={styles.actionDescription}>Track your progress</Text>
+            <Text style={styles.comingSoon}>Coming soon!</Text>
+          </TouchableOpacity>
+        </View>
         
         <View style={styles.userInfo}>
+          <Text style={styles.sectionTitle}>Profile</Text>
           <Text style={styles.label}>Name: {user?.firstName} {user?.lastName}</Text>
           <Text style={styles.label}>Email: {user?.email}</Text>
           <Text style={styles.label}>Username: {user?.username}</Text>
@@ -68,33 +89,85 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  placeholder: {
+  welcomeText: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#2e7d32',
-    marginBottom: 10,
+    color: '#333',
+    textAlign: 'center',
+    marginTop: 30,
+    marginBottom: 40,
   },
-  info: {
-    fontSize: 16,
-    color: '#666',
+  primaryButton: {
+    backgroundColor: '#2e7d32',
+    paddingVertical: 18,
+    paddingHorizontal: 40,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginBottom: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 30,
   },
-  userInfo: {
+  actionCard: {
+    flex: 1,
     backgroundColor: 'white',
     padding: 20,
-    borderRadius: 10,
+    marginHorizontal: 5,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
+  actionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  actionDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+  },
+  comingSoon: {
+    fontSize: 11,
+    color: '#4caf50',
+    fontStyle: 'italic',
+  },
+  userInfo: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
   label: {
     fontSize: 14,
-    color: '#333',
+    color: '#666',
     marginBottom: 8,
   },
 });
