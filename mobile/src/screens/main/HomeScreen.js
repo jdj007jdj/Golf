@@ -85,10 +85,12 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
         
         <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('RoundHistory')}
+          >
             <Text style={styles.actionTitle}>Round History</Text>
             <Text style={styles.actionDescription}>View your past rounds</Text>
-            <Text style={styles.comingSoon}>Coming soon!</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionCard}>

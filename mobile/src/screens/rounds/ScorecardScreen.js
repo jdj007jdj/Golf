@@ -12,17 +12,22 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../contexts/AuthContext';
+import { API_CONFIG } from '../../config/api';
 
 const { width } = Dimensions.get('window');
 
 const ScorecardScreen = ({ route, navigation }) => {
   const { round, course } = route.params;
+  const { token } = useAuth();
   
   // Initialize scores state - one score per hole
   const [scores, setScores] = useState({});
   const [currentHole, setCurrentHole] = useState(1);
   const [scoreAnimation] = useState(new Animated.Value(1));
   const [isLoading, setIsLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isSavingRound, setIsSavingRound] = useState(false);
   
   // Storage key for this specific round
   const STORAGE_KEY = `golf_round_${round?.id || 'temp'}_scores`;
@@ -106,7 +111,7 @@ const ScorecardScreen = ({ route, navigation }) => {
     }
   };
 
-  const updateScore = (holeNumber, newScore) => {
+  const updateScore = async (holeNumber, newScore) => {
     // Score validation: must be between 1-15 strokes
     if (newScore < 0) newScore = 0;
     if (newScore > 15) newScore = 15;
@@ -127,10 +132,64 @@ const ScorecardScreen = ({ route, navigation }) => {
       }),
     ]).start();
 
+    // Update local state first
     setScores(prev => ({
       ...prev,
       [holeNumber]: newScore
     }));
+
+    // Save to backend if score > 0 (only save actual scores, not clears)
+    if (newScore > 0) {
+      await saveScoreToBackend(holeNumber, newScore);
+    }
+  };
+
+  const saveScoreToBackend = async (holeNumber, score) => {
+    try {
+      const hole = holes.find(h => h.holeNumber === holeNumber);
+      if (!hole || !round?.id) {
+        console.log('Missing hole or round data, skipping backend save');
+        return;
+      }
+
+      const requestBody = {
+        holeId: hole.id,
+        strokes: score,
+        putts: null // Could be extended later
+      };
+      
+      console.log('Saving score to backend:', {
+        url: `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ROUNDS}/${round.id}/scores`,
+        body: requestBody,
+        holeNumber: hole.holeNumber,
+      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ROUNDS}/${round.id}/scores`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to save score to backend:', errorData);
+        // Don't show alert for save errors as it would be disruptive during play
+      } else {
+        console.log(`Score saved to backend: Hole ${holeNumber} = ${score}`);
+      }
+    } catch (error) {
+      console.error('Error saving score to backend:', error);
+      // Silently fail - local storage will preserve the score
+    }
   };
 
   const getCurrentHoleData = () => {
@@ -142,8 +201,18 @@ const ScorecardScreen = ({ route, navigation }) => {
 
   // Calculate running total
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
-  const totalPar = holes.slice(0, currentHole).reduce((sum, hole) => sum + hole.par, 0);
+  const playedHoles = holes.filter(hole => scores[hole.holeNumber] > 0);
+  const totalPar = playedHoles.reduce((sum, hole) => sum + hole.par, 0);
   const scoreToPar = totalScore - totalPar;
+  
+  // Check round completion status
+  const holesCompleted = Object.keys(scores).filter(hole => scores[hole] > 0).length;
+  const isRoundComplete = holesCompleted === holes.length;
+  
+  // Check if front 9, back 9, or all 18 holes are complete
+  const front9Complete = holes.slice(0, 9).every(hole => scores[hole.holeNumber] > 0);
+  const back9Complete = holes.slice(9, 18).every(hole => scores[hole.holeNumber] > 0);
+  const canFinishRound = front9Complete || back9Complete || isRoundComplete;
 
   const nextHole = () => {
     if (currentHole < holes.length) {
@@ -154,6 +223,202 @@ const ScorecardScreen = ({ route, navigation }) => {
   const prevHole = () => {
     if (currentHole > 1) {
       setCurrentHole(currentHole - 1);
+    }
+  };
+
+  const handleFinishRound = () => {
+    let roundType = '';
+    if (isRoundComplete) {
+      roundType = 'Full Round (18 holes)';
+    } else if (front9Complete && back9Complete) {
+      roundType = 'Full Round (18 holes)';
+    } else if (front9Complete) {
+      roundType = 'Front 9';
+    } else if (back9Complete) {
+      roundType = 'Back 9';
+    }
+
+    const totalCoursePar = isRoundComplete 
+      ? holes.reduce((sum, hole) => sum + hole.par, 0)
+      : playedHoles.reduce((sum, hole) => sum + hole.par, 0);
+    const finalScore = totalScore;
+    const finalScoreToPar = finalScore - totalCoursePar;
+    
+    Alert.alert(
+      'Finish Round?',
+      `Are you sure you want to finish this ${roundType}?\n\nFinal Score: ${finalScore}\nPar: ${totalCoursePar}\nScore: ${finalScoreToPar === 0 ? 'E' : finalScoreToPar > 0 ? `+${finalScoreToPar}` : finalScoreToPar}\n\nHoles Completed: ${holesCompleted}/${holes.length}`,
+      [
+        {
+          text: 'Continue Playing',
+          style: 'cancel',
+        },
+        {
+          text: 'Finish Round',
+          style: 'destructive',
+          onPress: async () => {
+            // Show loading state
+            setIsSavingRound(true);
+            
+            try {
+              // Save round to backend
+              const result = await completeRoundInBackend();
+              
+              if (!result.success) {
+                setIsSavingRound(false);
+                Alert.alert(
+                  'Save Failed', 
+                  `Could not save your round to the server: ${result.error}\n\nYour scores are saved locally. Try again later or contact support.`,
+                  [
+                    {
+                      text: 'Continue Anyway',
+                      onPress: () => {
+                        clearActiveRound();
+                        navigation.navigate('RoundSummary', {
+                          roundData: round,
+                          course: course,
+                          scores: scores,
+                          roundType: roundType,
+                          holesCompleted: holesCompleted,
+                          saveError: true
+                        });
+                      }
+                    },
+                    { text: 'Try Again', onPress: () => {} }
+                  ]
+                );
+                return;
+              }
+              
+              // Success - clear active round and navigate
+              await clearActiveRound();
+              navigation.navigate('RoundSummary', {
+                roundData: result.data || round,
+                course: course,
+                scores: scores,
+                roundType: roundType,
+                holesCompleted: holesCompleted,
+                saveError: false
+              });
+            } catch (error) {
+              console.error('Error finishing round:', error);
+              setIsSavingRound(false);
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSettings = () => {
+    Alert.alert(
+      'Round Settings',
+      'What would you like to do?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Finish Incomplete Round',
+          style: 'destructive',
+          onPress: async () => {
+            // Show loading state
+            setIsSavingRound(true);
+            
+            try {
+              // Save round to backend
+              const result = await completeRoundInBackend();
+              
+              if (!result.success) {
+                setIsSavingRound(false);
+                Alert.alert(
+                  'Save Failed', 
+                  `Could not save your round to the server: ${result.error}\n\nYour scores are saved locally. Try again later or contact support.`,
+                  [
+                    {
+                      text: 'Continue Anyway',
+                      onPress: () => {
+                        clearActiveRound();
+                        navigation.navigate('RoundSummary', {
+                          roundData: round,
+                          course: course,
+                          scores: scores,
+                          roundType: 'Incomplete Round',
+                          holesCompleted: holesCompleted,
+                          saveError: true
+                        });
+                      }
+                    },
+                    { text: 'Try Again', onPress: () => {} }
+                  ]
+                );
+                return;
+              }
+              
+              // Success - clear active round and navigate
+              await clearActiveRound();
+              navigation.navigate('RoundSummary', {
+                roundData: result.data || round,
+                course: course,
+                scores: scores,
+                roundType: 'Incomplete Round',
+                holesCompleted: holesCompleted,
+                saveError: false
+              });
+            } catch (error) {
+              console.error('Error finishing round:', error);
+              setIsSavingRound(false);
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const completeRoundInBackend = async () => {
+    try {
+      if (!round?.id) {
+        console.log('No round ID, skipping backend completion');
+        return { success: true }; // Allow local completion
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ROUNDS}/${round.id}/complete`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Failed to complete round in backend:', data);
+        return { success: false, error: data.message || 'Failed to save round' };
+      }
+
+      console.log('Round completed in backend:', data);
+      return { success: true, data: data.data };
+    } catch (error) {
+      console.error('Error completing round in backend:', error);
+      return { success: false, error: error.message || 'Network error' };
+    }
+  };
+
+  const clearActiveRound = async () => {
+    try {
+      await AsyncStorage.removeItem('golf_active_round');
+      console.log('Active round cleared');
+    } catch (error) {
+      console.error('Error clearing active round:', error);
     }
   };
 
@@ -178,6 +443,12 @@ const ScorecardScreen = ({ route, navigation }) => {
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Scorecard</Text>
+        <TouchableOpacity 
+          style={styles.settingsButton}
+          onPress={handleSettings}
+        >
+          <Text style={styles.settingsText}>⋯</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Score Summary */}
@@ -382,6 +653,44 @@ const ScorecardScreen = ({ route, navigation }) => {
           ))}
         </ScrollView>
       </View>
+
+      {/* Finish Round Button - Only show for front 9, back 9, or full round complete */}
+      {canFinishRound && (
+        <View style={styles.finishRoundContainer}>
+          <TouchableOpacity 
+            style={[
+              styles.finishRoundButton,
+              !isRoundComplete && styles.finishRoundButtonIncomplete
+            ]}
+            onPress={handleFinishRound}
+            activeOpacity={0.8}
+          >
+            <Text style={[
+              styles.finishRoundButtonText,
+              !isRoundComplete && styles.finishRoundButtonTextIncomplete
+            ]}>
+              {isRoundComplete ? 'Finish Full Round' : 
+               front9Complete && !back9Complete ? 'Finish Front 9' :
+               back9Complete && !front9Complete ? 'Finish Back 9' :
+               'Finish Round'}
+            </Text>
+            <Text style={styles.finishRoundSubtext}>
+              Score: {totalScore} ({scoreToPar === 0 ? 'E' : scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}) • {holesCompleted} holes
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      {/* Saving Round Overlay */}
+      {isSavingRound && (
+        <View style={styles.savingOverlay}>
+          <View style={styles.savingContainer}>
+            <ActivityIndicator size="large" color="#2e7d32" />
+            <Text style={styles.savingText}>Saving Round</Text>
+            <Text style={styles.savingSubtext}>Please wait while we save your round...</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -406,9 +715,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#2e7d32',
     padding: 20,
     paddingTop: 60,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   backButton: {
-    marginBottom: 10,
+    flex: 1,
   },
   backText: {
     color: 'white',
@@ -418,6 +730,17 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: 'white',
+    flex: 2,
+    textAlign: 'center',
+  },
+  settingsButton: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  settingsText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
   
   // Score Summary
@@ -710,6 +1033,84 @@ const styles = StyleSheet.create({
     color: '#4caf50',
     fontWeight: 'bold',
     marginTop: 2,
+  },
+  
+  // Finish Round Button
+  finishRoundContainer: {
+    backgroundColor: 'white',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  finishRoundButton: {
+    backgroundColor: '#d32f2f',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  finishRoundButtonIncomplete: {
+    backgroundColor: '#ff9800',
+  },
+  finishRoundButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  finishRoundButtonTextIncomplete: {
+    fontSize: 16,
+  },
+  finishRoundSubtext: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  
+  // Saving Overlay
+  savingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  savingContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  savingText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  savingSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
   },
 });
 

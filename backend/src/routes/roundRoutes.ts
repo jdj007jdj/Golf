@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { validateRequest } from '../middleware/validateRequest';
+import { validateRequest } from '../middleware/expressValidatorMiddleware';
 import { body, param, query } from 'express-validator';
 
 const router = Router();
@@ -314,6 +314,10 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 router.put('/:id/complete', authMiddleware, [
   param('id').isUUID().withMessage('Invalid round ID')
 ], validateRequest, async (req: Request, res: Response) => {
+  console.log('=== COMPLETE ROUND ENDPOINT HIT ===');
+  console.log('Round ID:', req.params.id);
+  console.log('User ID:', req.user?.id);
+  
   try {
     const { id } = req.params;
     const userId = req.user?.id;
@@ -457,8 +461,13 @@ router.post('/:roundId/scores', authMiddleware, [
   param('roundId').isUUID().withMessage('Invalid round ID'),
   body('holeId').isUUID().withMessage('Valid hole ID is required'),
   body('strokes').isInt({ min: 1, max: 15 }).withMessage('Strokes must be between 1-15'),
-  body('putts').optional().isInt({ min: 0, max: 10 }).withMessage('Putts must be between 0-10')
+  body('putts').optional({ nullable: true }).isInt({ min: 0, max: 10 }).withMessage('Putts must be between 0-10')
 ], validateRequest, async (req: Request, res: Response) => {
+  console.log('=== SCORE POST ENDPOINT HIT ===');
+  console.log('Round ID:', req.params.roundId);
+  console.log('Request body:', req.body);
+  console.log('User ID:', req.user?.id);
+  
   try {
     const { roundId } = req.params;
     const { holeId, strokes, putts } = req.body;

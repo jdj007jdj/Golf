@@ -36,3 +36,9 @@ Setting up full-stack Golf application with React frontend, React Native mobile,
 - Original roundRoutes.ts saved as roundRoutes.complex.ts for future fixing
 - Issues to resolve: field name mismatches (status vs finishedAt, name vs holeNumber), malformed include structures, type safety
 - Must fix immediately after getting server running - this is production-critical code
+
+**CRITICAL FINDING (2025-01-13)**:
+- Fixed validation middleware incompatibility causing POST/PUT requests to hang
+- Root cause: mixing express-validator with Joi validateRequest middleware
+- Solution: Created expressValidatorMiddleware.ts for proper express-validator support
+- See CriticalLessonsLearned.md for full details and prevention guidelines
