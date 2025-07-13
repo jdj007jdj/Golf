@@ -15,6 +15,15 @@ export const SettingsProvider = ({ children }) => {
     theme: 'light',
     notificationsEnabled: true,
     handicap: null,
+    // Scorecard display options
+    scorecard: {
+      showHoleDistance: true,
+      showHandicapIndex: true,
+      showQuickScoreButtons: true,
+      showHoleProgress: true,
+      showScoreSummary: true,
+      showClubSelection: false, // Future feature
+    },
   });
   const [isLoading, setIsLoading] = useState(true);
 

@@ -33,6 +33,13 @@ const SettingsScreen = ({ navigation }) => {
   const [autoAdvanceHole, setAutoAdvanceHole] = useState(settings.autoAdvanceHole);
   const [keepScreenOn, setKeepScreenOn] = useState(settings.keepScreenOn);
   
+  // Scorecard Display Options - initialize from context
+  const [showHoleDistance, setShowHoleDistance] = useState(settings.scorecard?.showHoleDistance ?? true);
+  const [showHandicapIndex, setShowHandicapIndex] = useState(settings.scorecard?.showHandicapIndex ?? true);
+  const [showQuickScoreButtons, setShowQuickScoreButtons] = useState(settings.scorecard?.showQuickScoreButtons ?? true);
+  const [showHoleProgress, setShowHoleProgress] = useState(settings.scorecard?.showHoleProgress ?? true);
+  const [showScoreSummary, setShowScoreSummary] = useState(settings.scorecard?.showScoreSummary ?? true);
+  
   // Theme Preferences (preparing for future dark mode)
   const [theme, setTheme] = useState(settings.theme);
   const [notificationsEnabled, setNotificationsEnabled] = useState(settings.notificationsEnabled);
@@ -71,6 +78,14 @@ const SettingsScreen = ({ navigation }) => {
         theme,
         notificationsEnabled,
         handicap: handicap ? parseFloat(handicap) : null,
+        scorecard: {
+          showHoleDistance,
+          showHandicapIndex,
+          showQuickScoreButtons,
+          showHoleProgress,
+          showScoreSummary,
+          showClubSelection: false, // Future feature
+        },
       };
       
       const success = await updateSettings(newSettings);
@@ -258,6 +273,16 @@ const SettingsScreen = ({ navigation }) => {
           
           {renderSwitch('Track Putts', showPutts, setShowPutts, 'Show putt entry on scorecard')}
           {renderSwitch('Auto-advance Hole', autoAdvanceHole, setAutoAdvanceHole, 'Move to next hole after scoring')}
+        </View>
+
+        {/* Scorecard Display Section */}
+        {renderSectionHeader('Scorecard Display')}
+        <View style={styles.section}>
+          {renderSwitch('Hole Distance', showHoleDistance, setShowHoleDistance, 'Show distance to pin on each hole')}
+          {renderSwitch('Handicap Index', showHandicapIndex, setShowHandicapIndex, 'Show hole difficulty rating')}
+          {renderSwitch('Quick Score Buttons', showQuickScoreButtons, setShowQuickScoreButtons, 'Show birdie/par/bogey buttons')}
+          {renderSwitch('Hole Progress Bar', showHoleProgress, setShowHoleProgress, 'Show completed holes at bottom')}
+          {renderSwitch('Score Summary', showScoreSummary, setShowScoreSummary, 'Show running total and score to par')}
         </View>
 
         {/* App Preferences Section */}

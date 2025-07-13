@@ -118,8 +118,16 @@ router.get('/:id', authMiddleware, [
         course: {
           include: {
             holes: {
-              orderBy: { holeNumber: 'asc' }
-            }
+              orderBy: { holeNumber: 'asc' },
+              include: {
+                holeTees: {
+                  include: {
+                    teeBox: true
+                  }
+                }
+              }
+            },
+            teeBoxes: true
           }
         },
         participants: {

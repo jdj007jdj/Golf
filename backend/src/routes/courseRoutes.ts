@@ -12,7 +12,14 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     const courses = await prisma.course.findMany({
       include: {
         holes: {
-          orderBy: { holeNumber: 'asc' }
+          orderBy: { holeNumber: 'asc' },
+          include: {
+            holeTees: {
+              include: {
+                teeBox: true
+              }
+            }
+          }
         },
         teeBoxes: {
           orderBy: { name: 'asc' }
@@ -45,7 +52,17 @@ router.get('/:id', authMiddleware, [
       where: { id },
       include: {
         holes: {
-          orderBy: { holeNumber: 'asc' }
+          orderBy: { holeNumber: 'asc' },
+          include: {
+            holeTees: {
+              include: {
+                teeBox: true
+              }
+            }
+          }
+        },
+        teeBoxes: {
+          orderBy: { name: 'asc' }
         }
       }
     });

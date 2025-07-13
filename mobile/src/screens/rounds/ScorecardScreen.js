@@ -10,6 +10,8 @@ import {
   Alert,
   AppState,
   ActivityIndicator,
+  Modal,
+  Switch,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
@@ -21,10 +23,11 @@ const { width } = Dimensions.get('window');
 const ScorecardScreen = ({ route, navigation }) => {
   const { round, course } = route.params;
   const { token } = useAuth();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   
   // Initialize scores state - one score per hole
   const [scores, setScores] = useState({});
+  const [putts, setPutts] = useState({});
   const [currentHole, setCurrentHole] = useState(1);
   const [scoreAnimation] = useState(new Animated.Value(1));
   const [isLoading, setIsLoading] = useState(true);
@@ -51,7 +54,7 @@ const ScorecardScreen = ({ route, navigation }) => {
     if (!isLoading) {
       saveScores();
     }
-  }, [scores, isLoading]);
+  }, [scores, putts, isLoading]);
 
   // Handle app state changes (background/foreground)
   useEffect(() => {
@@ -79,7 +82,8 @@ const ScorecardScreen = ({ route, navigation }) => {
       const savedScores = await AsyncStorage.getItem(STORAGE_KEY);
       if (savedScores) {
         const parsedScores = JSON.parse(savedScores);
-        setScores(parsedScores);
+        setScores(parsedScores.scores || parsedScores); // Support old format
+        setPutts(parsedScores.putts || {});
         console.log('Loaded saved scores:', parsedScores);
       }
     } catch (error) {
@@ -96,7 +100,7 @@ const ScorecardScreen = ({ route, navigation }) => {
 
   const saveScores = async () => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ scores, putts }));
       console.log('Scores saved successfully');
     } catch (error) {
       console.error('Error saving scores:', error);
@@ -142,18 +146,25 @@ const ScorecardScreen = ({ route, navigation }) => {
 
     // Save to backend if score > 0 (only save actual scores, not clears)
     if (newScore > 0) {
-      await saveScoreToBackend(holeNumber, newScore);
-      
-      // Auto-advance to next hole if enabled and not on the last hole
-      if (settings.autoAdvanceHole && holeNumber < holes.length) {
-        setTimeout(() => {
-          setCurrentHole(holeNumber + 1);
-        }, 300); // Small delay for better UX
-      }
+      await saveScoreToBackend(holeNumber, newScore, putts[holeNumber]);
     }
   };
 
-  const saveScoreToBackend = async (holeNumber, score) => {
+  const updatePutts = async (holeNumber, newPutts) => {
+    // Putts validation: must be between 0-10
+    if (newPutts < 0) newPutts = 0;
+    if (newPutts > 10) newPutts = 10;
+    
+    // Update local state
+    setPutts(prev => ({ ...prev, [holeNumber]: newPutts }));
+
+    // Save to backend if score exists
+    if (scores[holeNumber] > 0) {
+      await saveScoreToBackend(holeNumber, scores[holeNumber], newPutts);
+    }
+  };
+
+  const saveScoreToBackend = async (holeNumber, score, puttCount = null) => {
     try {
       const hole = holes.find(h => h.holeNumber === holeNumber);
       if (!hole || !round?.id) {
@@ -164,7 +175,7 @@ const ScorecardScreen = ({ route, navigation }) => {
       const requestBody = {
         holeId: hole.id,
         strokes: score,
-        putts: null // Could be extended later
+        putts: puttCount
       };
       
       console.log('Saving score to backend:', {
@@ -202,11 +213,26 @@ const ScorecardScreen = ({ route, navigation }) => {
   };
 
   const getCurrentHoleData = () => {
-    return holes.find(hole => hole.holeNumber === currentHole) || holes[0];
+    const hole = holes.find(hole => hole.holeNumber === currentHole) || holes[0];
+    
+    // Extract distance from holeTees based on selected teeBox
+    let distance = null;
+    if (hole.holeTees && round?.teeBoxId) {
+      const holeTee = hole.holeTees.find(ht => ht.teeBoxId === round.teeBoxId);
+      if (holeTee) {
+        distance = holeTee.distanceYards;
+      }
+    }
+    
+    return {
+      ...hole,
+      yardage: distance
+    };
   };
 
   const currentHoleData = getCurrentHoleData();
   const currentScore = scores[currentHole] || 0;
+  const currentPutts = putts[currentHole] || 0;
 
   // Calculate running total
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
@@ -319,72 +345,6 @@ const ScorecardScreen = ({ route, navigation }) => {
     );
   };
 
-  const handleSettings = () => {
-    Alert.alert(
-      'Round Settings',
-      'What would you like to do?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Finish Incomplete Round',
-          style: 'destructive',
-          onPress: async () => {
-            // Show loading state
-            setIsSavingRound(true);
-            
-            try {
-              // Save round to backend
-              const result = await completeRoundInBackend();
-              
-              if (!result.success) {
-                setIsSavingRound(false);
-                Alert.alert(
-                  'Save Failed', 
-                  `Could not save your round to the server: ${result.error}\n\nYour scores are saved locally. Try again later or contact support.`,
-                  [
-                    {
-                      text: 'Continue Anyway',
-                      onPress: () => {
-                        clearActiveRound();
-                        navigation.navigate('RoundSummary', {
-                          roundData: round,
-                          course: course,
-                          scores: scores,
-                          roundType: 'Incomplete Round',
-                          holesCompleted: holesCompleted,
-                          saveError: true
-                        });
-                      }
-                    },
-                    { text: 'Try Again', onPress: () => {} }
-                  ]
-                );
-                return;
-              }
-              
-              // Success - clear active round and navigate
-              await clearActiveRound();
-              navigation.navigate('RoundSummary', {
-                roundData: result.data || round,
-                course: course,
-                scores: scores,
-                roundType: 'Incomplete Round',
-                holesCompleted: holesCompleted,
-                saveError: false
-              });
-            } catch (error) {
-              console.error('Error finishing round:', error);
-              setIsSavingRound(false);
-              Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
 
   const completeRoundInBackend = async () => {
     try {
@@ -431,6 +391,221 @@ const ScorecardScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleSettings = () => {
+    setShowSettings(true);
+  };
+
+  const handleCloseSettings = () => {
+    setShowSettings(false);
+  };
+
+  const handleEndRound = () => {
+    setShowSettings(false); // Close the modal first
+    
+    Alert.alert(
+      'End Round Early',
+      'Are you sure you want to end this round? Your progress will be saved.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'End Round',
+          style: 'destructive',
+          onPress: async () => {
+            // Show loading state
+            setIsSavingRound(true);
+            
+            try {
+              // Save round to backend
+              const result = await completeRoundInBackend();
+              
+              if (!result.success) {
+                setIsSavingRound(false);
+                Alert.alert(
+                  'Save Failed', 
+                  `Could not save your round to the server: ${result.error}\n\nYour scores are saved locally. Try again later or contact support.`,
+                  [
+                    {
+                      text: 'Continue Anyway',
+                      onPress: () => {
+                        clearActiveRound();
+                        navigation.navigate('RoundSummary', {
+                          roundData: round,
+                          course: course,
+                          scores: scores,
+                          roundType: 'Incomplete Round',
+                          holesCompleted: Object.keys(scores).length,
+                          saveError: true
+                        });
+                      }
+                    },
+                    { text: 'Try Again', onPress: () => {} }
+                  ]
+                );
+                return;
+              }
+              
+              // Success - clear active round and navigate
+              await clearActiveRound();
+              navigation.navigate('RoundSummary', {
+                roundData: result.data || round,
+                course: course,
+                scores: scores,
+                roundType: 'Incomplete Round',
+                holesCompleted: Object.keys(scores).length,
+                saveError: false
+              });
+            } catch (error) {
+              console.error('Error finishing round:', error);
+              setIsSavingRound(false);
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderSettingsModal = () => (
+    <Modal
+      visible={showSettings}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleCloseSettings}
+    >
+      <View style={styles.settingsModal}>
+        <View style={styles.settingsHeader}>
+          <TouchableOpacity onPress={handleCloseSettings}>
+            <Text style={styles.settingsCloseButton}>✕</Text>
+          </TouchableOpacity>
+          <Text style={styles.settingsTitle}>Scorecard Settings</Text>
+          <View style={styles.settingsHeaderSpacer} />
+        </View>
+        
+        <ScrollView style={styles.settingsContent}>
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Display Options</Text>
+            
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Score Summary</Text>
+                <Text style={styles.settingDescription}>Show running total and score to par</Text>
+              </View>
+              <Switch
+                value={settings.scorecard?.showScoreSummary !== false}
+                onValueChange={(value) => {
+                  updateSettings({
+                    scorecard: { ...settings.scorecard, showScoreSummary: value }
+                  });
+                }}
+                trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                thumbColor={settings.scorecard?.showScoreSummary !== false ? '#2E7D32' : '#F5F5F5'}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Hole Distance</Text>
+                <Text style={styles.settingDescription}>Show distance to pin on each hole</Text>
+              </View>
+              <Switch
+                value={settings.scorecard?.showHoleDistance !== false}
+                onValueChange={(value) => {
+                  updateSettings({
+                    scorecard: { ...settings.scorecard, showHoleDistance: value }
+                  });
+                }}
+                trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                thumbColor={settings.scorecard?.showHoleDistance !== false ? '#2E7D32' : '#F5F5F5'}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Handicap Index</Text>
+                <Text style={styles.settingDescription}>Show hole difficulty rating</Text>
+              </View>
+              <Switch
+                value={settings.scorecard?.showHandicapIndex !== false}
+                onValueChange={(value) => {
+                  updateSettings({
+                    scorecard: { ...settings.scorecard, showHandicapIndex: value }
+                  });
+                }}
+                trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                thumbColor={settings.scorecard?.showHandicapIndex !== false ? '#2E7D32' : '#F5F5F5'}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Quick Score Buttons</Text>
+                <Text style={styles.settingDescription}>Show birdie/par/bogey buttons</Text>
+              </View>
+              <Switch
+                value={settings.scorecard?.showQuickScoreButtons !== false}
+                onValueChange={(value) => {
+                  updateSettings({
+                    scorecard: { ...settings.scorecard, showQuickScoreButtons: value }
+                  });
+                }}
+                trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                thumbColor={settings.scorecard?.showQuickScoreButtons !== false ? '#2E7D32' : '#F5F5F5'}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Track Putts</Text>
+                <Text style={styles.settingDescription}>Show putt entry on scorecard</Text>
+              </View>
+              <Switch
+                value={settings.showPutts}
+                onValueChange={(value) => {
+                  updateSettings({ showPutts: value });
+                }}
+                trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                thumbColor={settings.showPutts ? '#2E7D32' : '#F5F5F5'}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Hole Progress Bar</Text>
+                <Text style={styles.settingDescription}>Show completed holes at bottom</Text>
+              </View>
+              <Switch
+                value={settings.scorecard?.showHoleProgress !== false}
+                onValueChange={(value) => {
+                  updateSettings({
+                    scorecard: { ...settings.scorecard, showHoleProgress: value }
+                  });
+                }}
+                trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                thumbColor={settings.scorecard?.showHoleProgress !== false ? '#2E7D32' : '#F5F5F5'}
+              />
+            </View>
+          </View>
+          
+          {/* Round Actions Section */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Round Actions</Text>
+            
+            <TouchableOpacity 
+              style={styles.endRoundButton}
+              onPress={handleEndRound}
+            >
+              <Text style={styles.endRoundButtonText}>End Round Early</Text>
+              <Text style={styles.endRoundButtonSubtext}>Finish and save your current progress</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
   // Show loading indicator while loading scores
   if (isLoading) {
     return (
@@ -456,33 +631,40 @@ const ScorecardScreen = ({ route, navigation }) => {
           style={styles.settingsButton}
           onPress={handleSettings}
         >
-          <Text style={styles.settingsText}>⋯</Text>
+          <Text style={styles.settingsText}>⚙</Text>
         </TouchableOpacity>
       </View>
 
       {/* Score Summary */}
-      <View style={styles.scoreSummary}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Total</Text>
-          <Text style={styles.summaryValue}>{totalScore}</Text>
+      {settings.scorecard?.showScoreSummary !== false && (
+        <View style={styles.scoreSummary}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Total</Text>
+            <Text style={styles.summaryValue}>{totalScore}</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Par</Text>
+            <Text style={styles.summaryValue}>{totalPar}</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Score</Text>
+            <Text style={[
+              styles.summaryValue,
+              scoreToPar < 0 ? styles.underPar : scoreToPar > 0 ? styles.overPar : styles.evenPar
+            ]}>
+              {scoreToPar === 0 ? 'E' : scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}
+            </Text>
+          </View>
         </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Par</Text>
-          <Text style={styles.summaryValue}>{totalPar}</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Score</Text>
-          <Text style={[
-            styles.summaryValue,
-            scoreToPar < 0 ? styles.underPar : scoreToPar > 0 ? styles.overPar : styles.evenPar
-          ]}>
-            {scoreToPar === 0 ? 'E' : scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}
-          </Text>
-        </View>
-      </View>
+      )}
 
       {/* Current Hole */}
-      <View style={styles.currentHole}>
+      <ScrollView 
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <View style={styles.currentHole}>
         <View style={styles.holeNavigation}>
           <TouchableOpacity 
             style={[styles.navButton, currentHole === 1 && styles.navButtonDisabled]}
@@ -493,8 +675,22 @@ const ScorecardScreen = ({ route, navigation }) => {
           </TouchableOpacity>
           
           <View style={styles.holeInfo}>
-            <Text style={styles.holeNumber}>Hole {currentHole}</Text>
-            <Text style={styles.holePar}>Par {currentHoleData.par}</Text>
+            <View style={styles.holeMainInfo}>
+              <Text style={styles.holeNumber}>Hole {currentHole}</Text>
+              <Text style={styles.holePar}>Par {currentHoleData.par}</Text>
+            </View>
+            <View style={styles.holeDetailsInfo}>
+              {settings.scorecard?.showHoleDistance !== false && currentHoleData.yardage && (
+                <Text style={styles.holeDistance}>
+                  {settings.measurementSystem === 'metric' 
+                    ? `${Math.round(currentHoleData.yardage * 0.9144)}m` 
+                    : `${currentHoleData.yardage}yds`}
+                </Text>
+              )}
+              {settings.scorecard?.showHandicapIndex !== false && currentHoleData.handicapIndex && (
+                <Text style={styles.holeHandicap}>HCP {currentHoleData.handicapIndex}</Text>
+              )}
+            </View>
           </View>
           
           <TouchableOpacity 
@@ -595,73 +791,125 @@ const ScorecardScreen = ({ route, navigation }) => {
         )}
 
         {/* Quick Score Buttons */}
-        <View style={styles.quickScores}>
-          <Text style={styles.quickScoreLabel}>Quick Entry</Text>
-          <View style={styles.quickScoreButtons}>
-            {[currentHoleData.par - 1, currentHoleData.par, currentHoleData.par + 1, currentHoleData.par + 2]
-              .filter(score => score >= 1 && score <= 15) // Only show valid scores
-              .map((score) => (
-              <TouchableOpacity
-                key={score}
+        {settings.scorecard?.showQuickScoreButtons !== false && (
+          <View style={styles.quickScores}>
+            <Text style={styles.quickScoreLabel}>Quick Entry</Text>
+            <View style={styles.quickScoreButtons}>
+              {[currentHoleData.par - 1, currentHoleData.par, currentHoleData.par + 1, currentHoleData.par + 2]
+                .filter(score => score >= 1 && score <= 15) // Only show valid scores
+                .map((score) => (
+                <TouchableOpacity
+                  key={score}
+                  style={[
+                    styles.quickButton,
+                    currentScore === score && styles.quickButtonSelected
+                  ]}
+                  onPress={() => updateScore(currentHole, score)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[
+                    styles.quickButtonText,
+                    currentScore === score && styles.quickButtonTextSelected
+                  ]}>
+                    {score}
+                  </Text>
+                  <Text style={[
+                    styles.quickButtonLabel,
+                    currentScore === score && styles.quickButtonLabelSelected
+                  ]}>
+                    {score === currentHoleData.par - 1 ? 'Birdie' :
+                     score === currentHoleData.par ? 'Par' :
+                     score === currentHoleData.par + 1 ? 'Bogey' :
+                     'Double'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Putts Entry */}
+        {settings.showPutts && (
+          <View style={styles.puttsSection}>
+            <Text style={styles.puttsLabel}>Putts</Text>
+            <View style={styles.puttsControls}>
+              <TouchableOpacity 
                 style={[
-                  styles.quickButton,
-                  currentScore === score && styles.quickButtonSelected
+                  styles.puttsButton, 
+                  currentPutts <= 0 && styles.puttsButtonDisabled
                 ]}
-                onPress={() => updateScore(currentHole, score)}
-                activeOpacity={0.7}
+                onPress={() => currentPutts > 0 && updatePutts(currentHole, currentPutts - 1)}
+                disabled={currentPutts <= 0}
+                activeOpacity={currentPutts <= 0 ? 1 : 0.7}
               >
                 <Text style={[
-                  styles.quickButtonText,
-                  currentScore === score && styles.quickButtonTextSelected
-                ]}>
-                  {score}
-                </Text>
-                <Text style={[
-                  styles.quickButtonLabel,
-                  currentScore === score && styles.quickButtonLabelSelected
-                ]}>
-                  {score === currentHoleData.par - 1 ? 'Birdie' :
-                   score === currentHoleData.par ? 'Par' :
-                   score === currentHoleData.par + 1 ? 'Bogey' :
-                   'Double'}
-                </Text>
+                  styles.puttsButtonText,
+                  currentPutts <= 0 && styles.puttsButtonTextDisabled
+                ]}>−</Text>
               </TouchableOpacity>
-            ))}
+              
+              <View style={styles.puttsDisplay}>
+                <Text style={styles.puttsValue}>{currentPutts || '0'}</Text>
+              </View>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.puttsButton, 
+                  currentPutts >= 10 && styles.puttsButtonDisabled
+                ]}
+                onPress={() => currentPutts < 10 && updatePutts(currentHole, currentPutts + 1)}
+                disabled={currentPutts >= 10}
+                activeOpacity={currentPutts >= 10 ? 1 : 0.7}
+              >
+                <Text style={[
+                  styles.puttsButtonText,
+                  currentPutts >= 10 && styles.puttsButtonTextDisabled
+                ]}>+</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+        )}
         </View>
-      </View>
+      </ScrollView>
 
       {/* Hole Progress */}
-      <View style={styles.holeProgress}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.progressContainer}
-        >
-          {holes.map((hole) => (
-            <TouchableOpacity
-              key={hole.holeNumber}
-              style={[
-                styles.progressHole,
-                hole.holeNumber === currentHole && styles.progressHoleCurrent,
-                scores[hole.holeNumber] > 0 && styles.progressHoleCompleted
-              ]}
-              onPress={() => setCurrentHole(hole.holeNumber)}
-            >
-              <Text style={[
-                styles.progressHoleNumber,
-                hole.holeNumber === currentHole && styles.progressHoleNumberCurrent,
-                scores[hole.holeNumber] > 0 && styles.progressHoleNumberCompleted
-              ]}>
-                {hole.holeNumber}
-              </Text>
-              {scores[hole.holeNumber] > 0 && (
-                <Text style={styles.progressHoleScore}>{scores[hole.holeNumber]}</Text>
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      {settings.scorecard?.showHoleProgress !== false && (
+        <View style={styles.holeProgress}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.progressContainer}
+          >
+            {holes.map((hole) => (
+              <TouchableOpacity
+                key={hole.holeNumber}
+                style={[
+                  styles.progressHole,
+                  hole.holeNumber === currentHole && styles.progressHoleCurrent,
+                  scores[hole.holeNumber] > 0 && styles.progressHoleCompleted
+                ]}
+                onPress={() => setCurrentHole(hole.holeNumber)}
+              >
+                <Text style={[
+                  styles.progressHoleNumber,
+                  hole.holeNumber === currentHole && styles.progressHoleNumberCurrent,
+                  scores[hole.holeNumber] > 0 && styles.progressHoleNumberCompleted
+                ]}>
+                  {hole.holeNumber}
+                </Text>
+                {scores[hole.holeNumber] > 0 && (
+                  <View style={styles.progressScoreContainer}>
+                    <Text style={styles.progressHoleScore}>{scores[hole.holeNumber]}</Text>
+                    {settings.showPutts && putts[hole.holeNumber] > 0 && (
+                      <Text style={styles.progressHolePutts}>{putts[hole.holeNumber]}p</Text>
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Finish Round Button - Only show for front 9, back 9, or full round complete */}
       {canFinishRound && (
@@ -700,6 +948,9 @@ const ScorecardScreen = ({ route, navigation }) => {
           </View>
         </View>
       )}
+      
+      {/* Settings Modal */}
+      {renderSettingsModal()}
     </View>
   );
 };
@@ -792,10 +1043,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   
+  // Scroll Container
+  scrollContainer: {
+    flex: 1,
+  },
+  
   // Current Hole
   currentHole: {
-    flex: 1,
     padding: 20,
+    minHeight: 600, // Ensure enough space for content
   },
   holeNavigation: {
     flexDirection: 'row',
@@ -830,6 +1086,17 @@ const styles = StyleSheet.create({
   holeInfo: {
     alignItems: 'center',
   },
+  holeMainInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  holeDetailsInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
   holeNumber: {
     fontSize: 32,
     fontWeight: 'bold',
@@ -838,6 +1105,16 @@ const styles = StyleSheet.create({
   holePar: {
     fontSize: 16,
     color: '#666',
+  },
+  holeDistance: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  holeHandicap: {
+    fontSize: 14,
+    color: '#888',
+    fontStyle: 'italic',
   },
   
   // Score Entry
@@ -997,6 +1274,60 @@ const styles = StyleSheet.create({
     color: '#4caf50',
   },
   
+  // Putts Section
+  puttsSection: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  puttsLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  puttsControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  puttsButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  puttsButtonDisabled: {
+    backgroundColor: '#f8f8f8',
+  },
+  puttsButtonText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2e7d32',
+  },
+  puttsButtonTextDisabled: {
+    color: '#ccc',
+  },
+  puttsDisplay: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 16,
+  },
+  puttsValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  
   // Hole Progress
   holeProgress: {
     backgroundColor: 'white',
@@ -1037,11 +1368,19 @@ const styles = StyleSheet.create({
   progressHoleNumberCompleted: {
     color: '#4caf50',
   },
+  progressScoreContainer: {
+    alignItems: 'center',
+    marginTop: 2,
+  },
   progressHoleScore: {
     fontSize: 10,
     color: '#4caf50',
     fontWeight: 'bold',
-    marginTop: 2,
+  },
+  progressHolePutts: {
+    fontSize: 8,
+    color: '#666',
+    marginTop: 1,
   },
   
   // Finish Round Button
@@ -1119,6 +1458,97 @@ const styles = StyleSheet.create({
   savingSubtext: {
     fontSize: 14,
     color: '#666',
+    textAlign: 'center',
+  },
+  
+  // Settings Modal
+  settingsModal: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingTop: 20,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  settingsCloseButton: {
+    fontSize: 24,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  settingsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+  },
+  settingsHeaderSpacer: {
+    width: 24,
+  },
+  settingsContent: {
+    flex: 1,
+  },
+  settingsSection: {
+    backgroundColor: '#FFFFFF',
+    margin: 20,
+    borderRadius: 12,
+    paddingVertical: 8,
+  },
+  settingsSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666666',
+    textTransform: 'uppercase',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    minHeight: 60,
+  },
+  settingLabelContainer: {
+    flex: 1,
+    marginRight: 10,
+  },
+  settingLabel: {
+    fontSize: 16,
+    color: '#1A1A1A',
+    fontWeight: '500',
+  },
+  settingDescription: {
+    fontSize: 12,
+    color: '#666666',
+    marginTop: 2,
+  },
+  endRoundButton: {
+    margin: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFEBEE',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+    alignItems: 'center',
+  },
+  endRoundButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#D32F2F',
+    marginBottom: 4,
+  },
+  endRoundButtonSubtext: {
+    fontSize: 12,
+    color: '#F44336',
     textAlign: 'center',
   },
 });
