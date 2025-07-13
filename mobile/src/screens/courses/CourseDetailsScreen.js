@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { useSettings } from '../../contexts/SettingsContext';
 
 const CourseDetailsScreen = ({ route, navigation }) => {
   const { course } = route.params;
+  const { formatDistance } = useSettings();
   
   const totalPar = course.holes?.reduce((sum, hole) => sum + hole.par, 0) || 0;
   const totalYards = course.holes?.reduce((sum, hole) => sum + (hole.yardage || 0), 0) || 0;
@@ -54,10 +56,10 @@ const CourseDetailsScreen = ({ route, navigation }) => {
             </View>
             {front9.some(hole => hole.yardage) && (
               <View style={styles.holeRow}>
-                <Text style={styles.holeLabel}>Yards</Text>
+                <Text style={styles.holeLabel}>Distance</Text>
                 {front9.map((hole) => (
                   <Text key={hole.id} style={styles.holeYards}>
-                    {hole.yardage || '-'}
+                    {hole.yardage ? formatDistance(hole.yardage).split(' ')[0] : '-'}
                   </Text>
                 ))}
               </View>
@@ -87,10 +89,10 @@ const CourseDetailsScreen = ({ route, navigation }) => {
               </View>
               {back9.some(hole => hole.yardage) && (
                 <View style={styles.holeRow}>
-                  <Text style={styles.holeLabel}>Yards</Text>
+                  <Text style={styles.holeLabel}>Distance</Text>
                   {back9.map((hole) => (
                     <Text key={hole.id} style={styles.holeYards}>
-                      {hole.yardage || '-'}
+                      {hole.yardage ? formatDistance(hole.yardage).split(' ')[0] : '-'}
                     </Text>
                   ))}
                 </View>
@@ -129,8 +131,8 @@ const CourseDetailsScreen = ({ route, navigation }) => {
           </View>
           {totalYards > 0 && (
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{totalYards}</Text>
-              <Text style={styles.statLabel}>Total Yards</Text>
+              <Text style={styles.statValue}>{formatDistance(totalYards).split(' ')[0]}</Text>
+              <Text style={styles.statLabel}>Total {formatDistance(totalYards).split(' ')[1]}</Text>
             </View>
           )}
         </View>

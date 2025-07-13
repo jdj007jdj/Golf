@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { API_CONFIG } from '../../config/api';
 
 const { width } = Dimensions.get('window');
@@ -20,6 +21,7 @@ const { width } = Dimensions.get('window');
 const ScorecardScreen = ({ route, navigation }) => {
   const { round, course } = route.params;
   const { token } = useAuth();
+  const { settings } = useSettings();
   
   // Initialize scores state - one score per hole
   const [scores, setScores] = useState({});
@@ -141,6 +143,13 @@ const ScorecardScreen = ({ route, navigation }) => {
     // Save to backend if score > 0 (only save actual scores, not clears)
     if (newScore > 0) {
       await saveScoreToBackend(holeNumber, newScore);
+      
+      // Auto-advance to next hole if enabled and not on the last hole
+      if (settings.autoAdvanceHole && holeNumber < holes.length) {
+        setTimeout(() => {
+          setCurrentHole(holeNumber + 1);
+        }, 300); // Small delay for better UX
+      }
     }
   };
 

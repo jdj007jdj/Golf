@@ -19,6 +19,10 @@ export const API_CONFIG = {
       LOGOUT: '/api/auth/logout'
     },
     COURSES: '/api/courses',
-    ROUNDS: '/api/rounds'
+    ROUNDS: '/api/rounds',
+    USERS: {
+      PROFILE: '/api/users/profile',
+      STATS: '/api/users/stats'
+    }
   }
 };

@@ -43,3 +43,18 @@
   - Fixed putts validation to accept nullable values
 - Phase: 1.5 COMPLETE
 - Next: Phase 1.6 - Basic user statistics
+
+### 2025-01-13 - Phase 1.6 User Settings & Preferences
+- Completed:
+  - Phase 1.6.1: Created comprehensive SettingsScreen with organized categories
+  - Phase 1.6.2: Implemented measurement system toggle (Imperial/Metric)
+  - Phase 1.6.3: Added user profile settings (name, email, handicap)
+  - Phase 1.6.4: Implemented app preferences (tee box, scoring options, theme prep)
+- Key features:
+  - Global SettingsContext for app-wide settings management
+  - Distance conversion functions for metric/imperial
+  - Auto-advance hole option for scorecard
+  - Backend integration for profile updates (PUT /api/users/profile)
+  - User statistics endpoint (GET /api/users/stats)
+- Phase: 1.6 COMPLETE
+- Next: Phase 2.0 - Data Sync & Offline Support
