@@ -110,3 +110,15 @@ After completing any feature, fixing a bug, or reaching a development milestone,
 7. **No Shortcuts**: This project specifically requires incremental, tested development
 
 The plan contains 5 phases from Foundation Stabilization to Advanced Features. Always work within this framework and maintain the working application principle.
+
+## Mobile Development Instructions
+
+**IMPORTANT**: When working with React Native:
+
+1. **NEVER start Metro bundler** - The user will handle this manually
+2. **Building Process**: 
+   - Make code changes
+   - User will start Metro bundler manually
+   - User will build and test on device
+   - Wait for user feedback before proceeding
+3. **Testing**: Always wait for user confirmation that changes work on device before marking tasks complete

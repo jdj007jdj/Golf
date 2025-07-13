@@ -127,9 +127,9 @@ async function startServer() {
     await connectRedis();
     logger.info('Redis connected successfully');
 
-    // Start server
-    server.listen(config.port, () => {
-      logger.info(`Server running on port ${config.port} in ${config.nodeEnv} mode`);
+    // Start server - bind to all interfaces for WSL2 access
+    server.listen(config.port, '0.0.0.0', () => {
+      logger.info(`Server running on 0.0.0.0:${config.port} in ${config.nodeEnv} mode`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
