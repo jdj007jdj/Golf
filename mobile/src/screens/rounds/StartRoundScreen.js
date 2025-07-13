@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_CONFIG } from '../../config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const StartRoundScreen = ({ route, navigation }) => {
   console.log('=== StartRoundScreen Render ===');
@@ -91,6 +92,21 @@ const StartRoundScreen = ({ route, navigation }) => {
 
       if (response.ok && data.success) {
         console.log('SUCCESS: Navigating to scorecard');
+        
+        // Save active round data for resumption
+        const activeRoundData = {
+          round: data.data,
+          course: course,
+          startedAt: new Date().toISOString()
+        };
+        
+        try {
+          await AsyncStorage.setItem('golf_active_round', JSON.stringify(activeRoundData));
+          console.log('Active round saved for resumption');
+        } catch (error) {
+          console.error('Error saving active round:', error);
+        }
+        
         // Navigate to scorecard with the new round data
         navigation.navigate('Scorecard', { 
           round: data.data,
