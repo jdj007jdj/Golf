@@ -404,6 +404,45 @@ const ScorecardScreen = ({ route, navigation }) => {
     }
   };
 
+  // ENHANCEMENT: Dynamic Quick Score Buttons (EASILY REVERTIBLE)
+  // This function creates smarter quick entry buttons based on hole par
+  const getEnhancedQuickScores = (hole) => {
+    const par = hole.par;
+    let scores = [];
+    
+    if (par === 3) {
+      // Par 3: Show Hole-in-one, Eagle, Birdie, Par, Bogey, Double
+      scores = [1, par - 2, par - 1, par, par + 1, par + 2];
+    } else if (par === 4) {
+      // Par 4: Show Eagle, Birdie, Par, Bogey, Double, Triple
+      scores = [par - 2, par - 1, par, par + 1, par + 2, par + 3];
+    } else if (par === 5) {
+      // Par 5: Show Eagle, Birdie, Par, Bogey, Double, Triple
+      scores = [par - 2, par - 1, par, par + 1, par + 2, par + 3];
+    } else {
+      // Fallback to original logic
+      scores = [par - 1, par, par + 1, par + 2];
+    }
+    
+    // Remove duplicates and sort to ensure unique keys
+    const uniqueScores = [...new Set(scores)].sort((a, b) => a - b);
+    return uniqueScores.filter(score => score >= 1 && score <= 15);
+  };
+
+  // Enhanced label function for better score names
+  const getScoreLabel = (score, par) => {
+    const diff = score - par;
+    if (score === 1) return 'Ace';
+    if (diff <= -3) return 'Albatross';
+    if (diff === -2) return 'Eagle';
+    if (diff === -1) return 'Birdie';
+    if (diff === 0) return 'Par';
+    if (diff === 1) return 'Bogey';
+    if (diff === 2) return 'Double';
+    if (diff === 3) return 'Triple';
+    return `+${diff}`;
+  };
+
   const handleSettings = () => {
     setShowSettings(true);
   };
@@ -856,41 +895,52 @@ const ScorecardScreen = ({ route, navigation }) => {
         )}
 
 
-        {/* Quick Score Buttons */}
+        {/* Quick Score Buttons - ENHANCED */}
         {settings.scorecard?.showQuickScoreButtons !== false && (
           <View style={styles.quickScores}>
             <Text style={styles.quickScoreLabel}>Quick Entry</Text>
             <View style={styles.quickScoreButtons}>
-              {[currentHoleData.par - 1, currentHoleData.par, currentHoleData.par + 1, currentHoleData.par + 2]
-                .filter(score => score >= 1 && score <= 15) // Only show valid scores
-                .map((score) => (
+              {getEnhancedQuickScores(currentHoleData).map((score) => (
                 <TouchableOpacity
                   key={score}
                   style={[
                     styles.quickButton,
-                    currentScore === score && styles.quickButtonSelected
+                    currentScore === score && styles.quickButtonSelected,
+                    // Enhanced styling for special scores
+                    score === 1 && styles.quickButtonAce,
+                    score - currentHoleData.par <= -2 && score !== 1 && styles.quickButtonEagle,
                   ]}
                   onPress={() => updateScore(currentHole, score)}
                   activeOpacity={0.7}
                 >
                   <Text style={[
                     styles.quickButtonText,
-                    currentScore === score && styles.quickButtonTextSelected
+                    currentScore === score && styles.quickButtonTextSelected,
+                    // Enhanced text styling for special scores
+                    score === 1 && styles.quickButtonTextAce,
+                    score - currentHoleData.par <= -2 && score !== 1 && styles.quickButtonTextEagle,
                   ]}>
                     {score}
                   </Text>
                   <Text style={[
                     styles.quickButtonLabel,
-                    currentScore === score && styles.quickButtonLabelSelected
+                    currentScore === score && styles.quickButtonLabelSelected,
+                    score === 1 && styles.quickButtonLabelAce,
+                    score - currentHoleData.par <= -2 && score !== 1 && styles.quickButtonLabelEagle,
                   ]}>
-                    {score === currentHoleData.par - 1 ? 'Birdie' :
-                     score === currentHoleData.par ? 'Par' :
-                     score === currentHoleData.par + 1 ? 'Bogey' :
-                     'Double'}
+                    {getScoreLabel(score, currentHoleData.par)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
+            
+            {/* Enhanced info for special holes */}
+            {currentHoleData.par === 3 && (
+              <Text style={styles.quickScoreHint}>Par 3: Ace opportunity!</Text>
+            )}
+            {currentHoleData.par === 5 && (
+              <Text style={styles.quickScoreHint}>Par 5: Eagle chance!</Text>
+            )}
           </View>
         )}
 
@@ -913,11 +963,11 @@ const ScorecardScreen = ({ route, navigation }) => {
               let scoreColorStyle = null;
               if (holeScore > 0) {
                 if (scoreToPar < 0) {
-                  scoreColorStyle = styles.progressHoleUnderPar;
+                  scoreColorStyle = styles.progressRectUnderPar;
                 } else if (scoreToPar > 0) {
-                  scoreColorStyle = styles.progressHoleOverPar;
+                  scoreColorStyle = styles.progressRectOverPar;
                 } else {
-                  scoreColorStyle = styles.progressHoleEvenPar;
+                  scoreColorStyle = styles.progressRectEvenPar;
                 }
               }
 
@@ -925,26 +975,66 @@ const ScorecardScreen = ({ route, navigation }) => {
                 <TouchableOpacity
                   key={hole.holeNumber}
                   style={[
-                    styles.progressHole,
-                    hole.holeNumber === currentHole && styles.progressHoleCurrent,
-                    scores[hole.holeNumber] > 0 && styles.progressHoleCompleted,
-                    scoreColorStyle
+                    styles.progressRect,
+                    scores[hole.holeNumber] > 0 && styles.progressRectCompleted,
+                    scoreColorStyle,
+                    // Only apply current style if hole has no score, otherwise keep score-based color
+                    hole.holeNumber === currentHole && scores[hole.holeNumber] === 0 && styles.progressRectCurrent
                   ]}
                   onPress={() => setCurrentHole(hole.holeNumber)}
                 >
-                  <Text style={[
-                    styles.progressHoleNumber,
-                    hole.holeNumber === currentHole && styles.progressHoleNumberCurrent,
-                    scores[hole.holeNumber] > 0 && styles.progressHoleNumberCompleted
-                  ]}>
-                    {hole.holeNumber}
-                  </Text>
-                  {scores[hole.holeNumber] > 0 && (
-                    <View style={styles.progressScoreContainer}>
-                      <Text style={styles.progressHoleScore}>{scores[hole.holeNumber]}</Text>
+                  {/* Hole header with number and par */}
+                  <View style={styles.progressRectHeader}>
+                    <Text style={[
+                      styles.progressRectNumber,
+                      hole.holeNumber === currentHole && scores[hole.holeNumber] === 0 && styles.progressRectNumberCurrent
+                    ]}>
+                      {hole.holeNumber}
+                    </Text>
+                    <Text style={[
+                      styles.progressRectPar,
+                      hole.holeNumber === currentHole && scores[hole.holeNumber] === 0 && styles.progressRectParCurrent
+                    ]}>
+                      Par {hole.par}
+                    </Text>
+                  </View>
+
+                  {/* Score and putts info */}
+                  {holeScore > 0 ? (
+                    <View style={styles.progressRectScoreInfo}>
+                      <Text style={[
+                        styles.progressRectScore
+                        // No white text override for scores since they should remain visible
+                      ]}>
+                        {holeScore}
+                      </Text>
                       {settings.showPutts && putts[hole.holeNumber] > 0 && (
-                        <Text style={styles.progressHolePutts}>{putts[hole.holeNumber]}p</Text>
+                        <Text style={[
+                          styles.progressRectPutts
+                          // No white text override for putts since they should remain visible
+                        ]}>
+                          {putts[hole.holeNumber]}p
+                        </Text>
                       )}
+                      {/* Score to par indicator */}
+                      <Text style={[
+                        styles.progressRectToPar,
+                        scoreToPar < 0 && styles.progressRectToParUnder,
+                        scoreToPar > 0 && styles.progressRectToParOver,
+                        scoreToPar === 0 && styles.progressRectToParEven
+                        // No white text override for score-to-par since background is score-based colored
+                      ]}>
+                        {scoreToPar === 0 ? 'E' : scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.progressRectEmpty}>
+                      <Text style={[
+                        styles.progressRectEmptyText,
+                        hole.holeNumber === currentHole && scores[hole.holeNumber] === 0 && styles.progressRectEmptyTextCurrent
+                      ]}>
+                        —
+                      </Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -1325,6 +1415,40 @@ const styles = StyleSheet.create({
   quickButtonLabelSelected: {
     color: '#4caf50',
   },
+  // ENHANCED QUICK BUTTON STYLES (EASILY REVERTIBLE)
+  quickButtonAce: {
+    backgroundColor: '#fff3e0',
+    borderColor: '#ff9800',
+    borderWidth: 2,
+  },
+  quickButtonTextAce: {
+    color: '#f57c00',
+    fontWeight: '900',
+  },
+  quickButtonLabelAce: {
+    color: '#f57c00',
+    fontWeight: 'bold',
+  },
+  quickButtonEagle: {
+    backgroundColor: '#e3f2fd',
+    borderColor: '#2196f3',
+    borderWidth: 1.5,
+  },
+  quickButtonTextEagle: {
+    color: '#1976d2',
+    fontWeight: '800',
+  },
+  quickButtonLabelEagle: {
+    color: '#1976d2',
+    fontWeight: '600',
+  },
+  quickScoreHint: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
   
   // Putts Section
   puttsSection: {
@@ -1404,61 +1528,112 @@ const styles = StyleSheet.create({
   progressContainer: {
     paddingHorizontal: 20,
   },
-  progressHole: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
+  // Rectangular Progress Holes
+  progressRect: {
+    width: 80,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: '#f8f8f8',
     marginRight: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e0e0e0',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    justifyContent: 'space-between',
   },
-  progressHoleCurrent: {
+  progressRectCurrent: {
     backgroundColor: '#2e7d32',
     borderColor: '#1b5e20',
+    borderWidth: 2,
   },
-  progressHoleCompleted: {
+  progressRectCompleted: {
+    borderWidth: 1.5,
+  },
+  progressRectUnderPar: {
     backgroundColor: '#e8f5e8',
     borderColor: '#4caf50',
   },
-  progressHoleUnderPar: {
-    backgroundColor: '#e8f5e8',
-    borderColor: '#4caf50',
-  },
-  progressHoleEvenPar: {
+  progressRectEvenPar: {
     backgroundColor: '#f0f0f0',
     borderColor: '#999',
   },
-  progressHoleOverPar: {
+  progressRectOverPar: {
     backgroundColor: '#ffebee',
     borderColor: '#f44336',
   },
-  progressHoleNumber: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#666',
+  // Rectangle Header (Hole number and Par)
+  progressRectHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  progressHoleNumberCurrent: {
+  progressRectNumber: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  progressRectNumberCurrent: {
     color: 'white',
   },
-  progressHoleNumberCompleted: {
-    color: '#4caf50',
-  },
-  progressScoreContainer: {
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  progressHoleScore: {
+  progressRectPar: {
     fontSize: 10,
-    color: '#4caf50',
+    color: '#666',
+    fontWeight: '500',
+  },
+  progressRectParCurrent: {
+    color: 'rgba(255,255,255,0.8)',
+  },
+  // Rectangle Score Info
+  progressRectScoreInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  progressRectScore: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2e7d32',
+  },
+  progressRectScoreCurrent: {
+    color: 'white',
+  },
+  progressRectPutts: {
+    fontSize: 10,
+    color: '#666',
+    fontWeight: '500',
+  },
+  progressRectPuttsCurrent: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+  progressRectToPar: {
+    fontSize: 10,
     fontWeight: 'bold',
   },
-  progressHolePutts: {
-    fontSize: 8,
+  progressRectToParUnder: {
+    color: '#4caf50',
+  },
+  progressRectToParEven: {
     color: '#666',
-    marginTop: 1,
+  },
+  progressRectToParOver: {
+    color: '#f44336',
+  },
+  progressRectToParCurrent: {
+    color: 'white',
+  },
+  // Empty Rectangle (no score yet)
+  progressRectEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  progressRectEmptyText: {
+    fontSize: 16,
+    color: '#ccc',
+    fontWeight: 'bold',
+  },
+  progressRectEmptyTextCurrent: {
+    color: 'rgba(255,255,255,0.6)',
   },
   
   // Finish Round Button
