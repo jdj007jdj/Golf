@@ -1094,6 +1094,7 @@ const ScorecardScreen = ({ route, navigation }) => {
       
       {/* Settings Modal */}
       {renderSettingsModal()}
+      
     </View>
   );
 };
