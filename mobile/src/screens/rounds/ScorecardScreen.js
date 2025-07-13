@@ -17,6 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { API_CONFIG } from '../../config/api';
+import { calculateHolePerformance, filterRoundsByCourse, analyzeClubUsage, getClubInsightsForScorecard } from '../../utils/coursePerformanceUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -33,6 +34,9 @@ const ScorecardScreen = ({ route, navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [isSavingRound, setIsSavingRound] = useState(false);
+  const [historicalData, setHistoricalData] = useState(null);
+  const [clubData, setClubData] = useState(null);
+  const [statisticsCardExpanded, setStatisticsCardExpanded] = useState(true);
   
   // Storage key for this specific round
   const STORAGE_KEY = `golf_round_${round?.id || 'temp'}_scores`;
@@ -44,9 +48,10 @@ const ScorecardScreen = ({ route, navigation }) => {
     par: i + 1 <= 4 ? 4 : i + 1 <= 10 ? (i + 1) % 2 === 0 ? 5 : 3 : 4, // Mixed pars
   }));
 
-  // Load scores from AsyncStorage on component mount
+  // Load scores and historical data on component mount
   useEffect(() => {
     loadScores();
+    loadHistoricalData();
   }, []);
 
   // Save scores to AsyncStorage whenever scores change
@@ -114,6 +119,149 @@ const ScorecardScreen = ({ route, navigation }) => {
       console.log('Saved scores cleared');
     } catch (error) {
       console.error('Error clearing saved scores:', error);
+    }
+  };
+
+  const loadHistoricalData = async () => {
+    console.log('🚀 loadHistoricalData called');
+    console.log('🚀 course:', course?.id, course?.name);
+    console.log('🚀 token:', !!token);
+    
+    try {
+      if (!course?.id || !token) {
+        console.log('No course ID or token, skipping historical data load');
+        return;
+      }
+
+      console.log(`Loading historical data for course: ${course.name} (${course.id})`);
+
+      // Fetch historical rounds from backend API
+      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ROUNDS}?status=completed`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        console.error('Failed to fetch historical rounds:', response.status);
+        setHistoricalData(null);
+        return;
+      }
+
+      const roundsData = await response.json();
+      console.log('🔍 API Response rounds count:', roundsData.data?.length);
+      console.log('🔍 First round sample:', JSON.stringify(roundsData.data?.[0], null, 2));
+      
+      if (roundsData.success && roundsData.data && roundsData.data.length > 0) {
+        const rounds = roundsData.data;
+        
+        // Transform API data to match our coursePerformanceUtils format
+        const transformedRounds = rounds.map(round => {
+          console.log('🔍 Processing round:', round.id);
+          console.log('🔍 Round participants:', round.participants);
+          
+          // Extract scores from participants -> holeScores
+          let scores = {};
+          if (round.participants && round.participants.length > 0) {
+            // Find the current user's participant record
+            const userParticipant = round.participants.find(p => p.userId === round.participants[0].userId); // Assuming single participant for now
+            
+            if (userParticipant && userParticipant.holeScores) {
+              console.log('🔍 Found holeScores:', userParticipant.holeScores);
+              console.log('🔍 First holeScore sample:', JSON.stringify(userParticipant.holeScores[0], null, 2));
+              scores = userParticipant.holeScores.reduce((acc, scoreData) => {
+                console.log('🔍 Processing score:', scoreData);
+                if (scoreData.hole && scoreData.hole.holeNumber && scoreData.score !== null && scoreData.score !== undefined) {
+                  console.log(`🔍 Adding hole ${scoreData.hole.holeNumber}: ${scoreData.score}`);
+                  acc[scoreData.hole.holeNumber] = scoreData.score;
+                } else {
+                  console.log('🔍 Skipping score - missing data:', {
+                    holeNumber: scoreData.hole?.holeNumber,
+                    score: scoreData.score
+                  });
+                }
+                return acc;
+              }, {});
+            }
+          }
+          
+          console.log('🔍 Extracted scores:', scores);
+          console.log('🔍 Score keys count:', Object.keys(scores).length);
+          
+          // For testing: Add mock club data to demonstrate functionality
+          const mockClubs = {};
+          Object.keys(scores).forEach(holeNumber => {
+            const holeNum = parseInt(holeNumber);
+            if (holeNum <= 3) {
+              mockClubs[holeNumber] = Math.random() > 0.7 ? 'driver' : '3wood';
+            } else if (holeNum <= 6) {
+              mockClubs[holeNumber] = Math.random() > 0.5 ? '7iron' : '8iron';
+            } else if (holeNum <= 12) {
+              mockClubs[holeNumber] = Math.random() > 0.6 ? '9iron' : 'pwedge';
+            } else {
+              mockClubs[holeNumber] = Math.random() > 0.4 ? '7iron' : '6iron';
+            }
+          });
+
+          return {
+            id: round.id,
+            courseId: round.courseId,
+            date: round.startedAt,
+            scores: scores,
+            clubs: mockClubs, // Add mock club data
+            isCompleted: round.finishedAt !== null
+          };
+        });
+        
+        console.log('🔍 Transformed rounds count:', transformedRounds.length);
+        console.log('🔍 Course ID we want:', course.id);
+        console.log('🔍 First transformed round courseId:', transformedRounds[0]?.courseId);
+        console.log('🔍 First transformed round scores keys:', Object.keys(transformedRounds[0]?.scores || {}));
+        
+        // Filter for completed rounds with scores on this specific course
+        const completedRounds = transformedRounds.filter(round => {
+          const hasScores = Object.keys(round.scores).length > 0;
+          const isCorrectCourse = round.courseId === course.id;
+          const isCompleted = round.isCompleted;
+          
+          console.log(`🔍 Round ${round.id}: completed=${isCompleted}, correctCourse=${isCorrectCourse}, hasScores=${hasScores}`);
+          
+          return isCompleted && isCorrectCourse && hasScores;
+        });
+        
+        if (completedRounds.length > 0) {
+          console.log('🔍 completedRounds sample:', JSON.stringify(completedRounds[0], null, 2));
+          
+          // Calculate hole performance for this course
+          const holePerformance = calculateHolePerformance(completedRounds, course);
+          
+          console.log(`✅ Loaded historical data: ${completedRounds.length} completed rounds for ${course.name}`);
+          console.log('📊 Hole 1 performance sample:', holePerformance[1]);
+          
+          // Calculate club usage data
+          const clubUsageData = analyzeClubUsage(completedRounds, course);
+          console.log('🏌️ Club usage data calculated:', Object.keys(clubUsageData).length, 'holes with data');
+          
+          setHistoricalData({
+            rounds: completedRounds,
+            holePerformance,
+            totalRounds: completedRounds.length
+          });
+          
+          setClubData(clubUsageData);
+        } else {
+          console.log('No completed rounds with scores found for this course');
+          setHistoricalData(null);
+        }
+      } else {
+        console.log('No historical rounds data returned from API');
+        setHistoricalData(null);
+      }
+    } catch (error) {
+      console.error('Error loading historical data:', error);
+      setHistoricalData(null);
     }
   };
 
@@ -243,7 +391,113 @@ const ScorecardScreen = ({ route, navigation }) => {
     };
   };
 
+  const getCurrentHoleHistoricalData = () => {
+    console.log('🔍 getCurrentHoleHistoricalData called');
+    console.log('🔍 historicalData:', historicalData);
+    console.log('🔍 currentHole:', currentHole);
+    
+    if (!historicalData?.holePerformance) {
+      console.log('🔍 No historicalData.holePerformance');
+      return null;
+    }
+    
+    const holeStats = historicalData.holePerformance[currentHole];
+    console.log('🔍 holeStats for hole', currentHole, ':', holeStats);
+    
+    if (!holeStats || holeStats.timesPlayed === 0) {
+      console.log('🔍 No holeStats or timesPlayed = 0');
+      return null;
+    }
+    
+    console.log('🔍 Returning holeStats:', holeStats);
+    return holeStats;
+  };
+
+  const getCurrentHoleClubInsights = () => {
+    console.log('🏌️ getCurrentHoleClubInsights called');
+    console.log('🏌️ clubData:', clubData);
+    console.log('🏌️ currentHole:', currentHole);
+    
+    if (!clubData) {
+      console.log('🏌️ No clubData available');
+      return null;
+    }
+    
+    const clubInsights = getClubInsightsForScorecard(clubData, currentHole);
+    console.log('🏌️ Club insights for hole', currentHole, ':', clubInsights);
+    
+    return clubInsights;
+  };
+
+  const getExpandedInsights = () => {
+    if (!currentHoleHistorical || !currentHoleClubInsights) {
+      return null;
+    }
+
+    const insights = [];
+    const holeStats = currentHoleHistorical;
+    const clubStats = currentHoleClubInsights;
+
+    // Performance pattern insights
+    if (holeStats.doubleBogeyPercentage >= 20) {
+      insights.push({
+        type: 'warning',
+        title: 'Trouble Spot',
+        message: `You score double bogey or worse ${holeStats.doubleBogeyPercentage}% of the time here. Focus on course management.`
+      });
+    }
+
+    if (holeStats.birdiePercentage >= 25) {
+      insights.push({
+        type: 'opportunity',
+        title: 'Birdie Opportunity',
+        message: `You score birdie ${holeStats.birdiePercentage}% of the time. Attack this hole!`
+      });
+    }
+
+    // Club-specific insights
+    if (clubStats.hasData && clubStats.recommendation) {
+      insights.push({
+        type: 'club',
+        title: 'Club Performance',
+        message: `When you use ${clubStats.recommendation.club}, you average ${clubStats.recommendation.averageScore.toFixed(1)} vs ${clubStats.mostUsed.averageScore.toFixed(1)} with ${clubStats.mostUsed.club}.`
+      });
+    }
+
+    // Scoring pattern insights
+    if (holeStats.timesPlayed >= 5) {
+      const consistency = holeStats.worstScore - holeStats.bestScore;
+      if (consistency >= 4) {
+        insights.push({
+          type: 'tip',
+          title: 'Consistency Tip',
+          message: `Your scores range from ${holeStats.bestScore} to ${holeStats.worstScore}. Focus on playing within your abilities.`
+        });
+      }
+    }
+
+    // Difficulty-based tips
+    if (holeStats.difficulty === 'trouble' && holeStats.averageVsPar > 1) {
+      insights.push({
+        type: 'strategy',
+        title: 'Strategic Approach',
+        message: `This is your toughest hole (+${holeStats.averageVsPar.toFixed(1)} avg). Consider a more conservative strategy.`
+      });
+    } else if (holeStats.difficulty === 'easy' && holeStats.averageVsPar < -0.3) {
+      insights.push({
+        type: 'opportunity',
+        title: 'Scoring Hole',
+        message: `You typically score well here (${holeStats.averageVsPar.toFixed(1)} vs par). Be aggressive!`
+      });
+    }
+
+    return insights.length > 0 ? insights : null;
+  };
+
   const currentHoleData = getCurrentHoleData();
+  const currentHoleHistorical = getCurrentHoleHistoricalData();
+  const currentHoleClubInsights = getCurrentHoleClubInsights();
+  const expandedInsightsData = getExpandedInsights();
   const currentScore = scores[currentHole] || 0;
   const currentPutts = putts[currentHole] || 0;
 
@@ -252,6 +506,48 @@ const ScorecardScreen = ({ route, navigation }) => {
   const playedHoles = holes.filter(hole => scores[hole.holeNumber] > 0);
   const totalPar = playedHoles.reduce((sum, hole) => sum + hole.par, 0);
   const scoreToPar = totalScore - totalPar;
+  
+  // Calculate course progress tracking
+  const getCourseProgressData = () => {
+    if (!historicalData?.rounds || historicalData.rounds.length === 0 || playedHoles.length === 0) {
+      return null;
+    }
+    
+    // Calculate historical course average
+    const historicalScores = historicalData.rounds.map(round => {
+      const roundScore = Object.values(round.scores).reduce((sum, score) => sum + (score || 0), 0);
+      const roundHoles = Object.keys(round.scores).filter(hole => round.scores[hole] > 0).length;
+      return roundHoles === 18 ? roundScore : Math.round((roundScore / roundHoles) * 18);
+    });
+    
+    const avgHistoricalScore = historicalScores.reduce((sum, score) => sum + score, 0) / historicalScores.length;
+    const bestHistoricalScore = Math.min(...historicalScores);
+    
+    // Calculate projected score based on current pace
+    const currentPace = totalScore / playedHoles.length;
+    const projectedScore = Math.round(currentPace * 18);
+    
+    // Calculate comparison to historical average
+    const vsHistoricalAvg = projectedScore - avgHistoricalScore;
+    
+    // Calculate remaining holes average needed for personal best
+    const remainingHoles = 18 - playedHoles.length;
+    const neededForPB = remainingHoles > 0 ? (bestHistoricalScore - totalScore) / remainingHoles : 0;
+    
+    return {
+      projectedScore,
+      avgHistoricalScore: Math.round(avgHistoricalScore),
+      bestHistoricalScore,
+      vsHistoricalAvg: Math.round(vsHistoricalAvg * 10) / 10,
+      currentPace: Math.round(currentPace * 10) / 10,
+      neededForPB: Math.round(neededForPB * 10) / 10,
+      remainingHoles,
+      isOnPaceForPB: projectedScore <= bestHistoricalScore,
+      improvement: vsHistoricalAvg < 0
+    };
+  };
+  
+  const courseProgress = getCourseProgressData();
   
   // Check round completion status
   const holesCompleted = Object.keys(scores).filter(hole => scores[hole] > 0).length;
@@ -649,6 +945,23 @@ const ScorecardScreen = ({ route, navigation }) => {
                 thumbColor={settings.scorecard?.showHoleProgress !== false ? '#2E7D32' : '#F5F5F5'}
               />
             </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Historical Insights</Text>
+                <Text style={styles.settingDescription}>Show your averages and records on each hole</Text>
+              </View>
+              <Switch
+                value={settings.scorecard?.showHistoricalInsights !== false}
+                onValueChange={(value) => {
+                  updateSettings({
+                    scorecard: { ...settings.scorecard, showHistoricalInsights: value }
+                  });
+                }}
+                trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                thumbColor={settings.scorecard?.showHistoricalInsights !== false ? '#2E7D32' : '#F5F5F5'}
+              />
+            </View>
           </View>
           
           {/* Round Actions Section */}
@@ -717,6 +1030,191 @@ const ScorecardScreen = ({ route, navigation }) => {
               {scoreToPar === 0 ? 'E' : scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}
             </Text>
           </View>
+        </View>
+      )}
+      
+      {/* Statistics Card */}
+      {settings.scorecard?.showHistoricalInsights !== false && (currentHoleHistorical || currentHoleClubInsights || (courseProgress && playedHoles.length >= 3)) && (
+        <View style={[
+          styles.statisticsCard,
+          !statisticsCardExpanded && styles.statisticsCardCollapsed
+        ]}>
+          <TouchableOpacity 
+            style={styles.statisticsHeader}
+            onPress={() => setStatisticsCardExpanded(!statisticsCardExpanded)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.statisticsHeaderContent}>
+              <Text style={styles.statisticsTitle}>Statistics</Text>
+              <Text style={styles.statisticsSubtitle}>
+                Hole {currentHole} • Par {currentHoleData.par}
+                {!statisticsCardExpanded && currentHoleHistorical && (
+                  ` • Avg: ${currentHoleHistorical.averageScore}`
+                )}
+              </Text>
+            </View>
+            <Text style={styles.statisticsToggleIcon}>
+              {statisticsCardExpanded ? '▼' : '▶'}
+            </Text>
+          </TouchableOpacity>
+          
+          {statisticsCardExpanded && (
+            <View style={styles.statisticsContent}>
+          
+          {/* Hole Historical Data */}
+          {currentHoleHistorical && (
+            <View style={styles.statisticsSection}>
+              <Text style={styles.statisticsSectionTitle}>Your Performance</Text>
+              <View style={styles.statisticsGrid}>
+                <View style={styles.statisticsItem}>
+                  <Text style={styles.statisticsLabel}>Average Score</Text>
+                  <Text style={styles.statisticsValue}>{currentHoleHistorical.averageScore}</Text>
+                  <Text style={[
+                    styles.statisticsVsPar,
+                    currentHoleHistorical.averageVsPar < 0 ? styles.underPar :
+                    currentHoleHistorical.averageVsPar > 0 ? styles.overPar : styles.evenPar
+                  ]}>
+                    ({currentHoleHistorical.averageVsPar > 0 ? '+' : ''}{currentHoleHistorical.averageVsPar} vs par)
+                  </Text>
+                </View>
+                
+                <View style={styles.statisticsItem}>
+                  <Text style={styles.statisticsLabel}>Difficulty</Text>
+                  <View style={styles.difficultyContainer}>
+                    <Text style={styles.difficultyIcon}>
+                      {currentHoleHistorical.difficulty === 'easy' ? '🟢' :
+                       currentHoleHistorical.difficulty === 'fair' ? '🟡' :
+                       currentHoleHistorical.difficulty === 'challenging' ? '🟠' : '🔴'}
+                    </Text>
+                    <Text style={styles.difficultyText}>
+                      {currentHoleHistorical.difficulty.charAt(0).toUpperCase() + currentHoleHistorical.difficulty.slice(1)}
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.statisticsItem}>
+                  <Text style={styles.statisticsLabel}>Times Played</Text>
+                  <Text style={styles.statisticsValue}>{currentHoleHistorical.timesPlayed}</Text>
+                  {currentHoleHistorical.birdiePercentage > 0 && (
+                    <Text style={styles.statisticsDetail}>🐦 {currentHoleHistorical.birdiePercentage}%</Text>
+                  )}
+                </View>
+              </View>
+            </View>
+          )}
+          
+          {/* Club Recommendations */}
+          {currentHoleClubInsights && currentHoleClubInsights.hasData && (
+            <View style={styles.statisticsSection}>
+              <Text style={styles.statisticsSectionTitle}>Club Recommendations</Text>
+              <View style={styles.clubRecommendations}>
+                {currentHoleClubInsights.mostUsed && (
+                  <View style={styles.clubRecommendationItem}>
+                    <Text style={styles.clubLabel}>Usually:</Text>
+                    <Text style={styles.clubName}>{currentHoleClubInsights.mostUsed.club}</Text>
+                    <Text style={styles.clubStats}>
+                      ({currentHoleClubInsights.mostUsed.averageScore.toFixed(1)} avg, {currentHoleClubInsights.mostUsed.timesUsed}x)
+                    </Text>
+                  </View>
+                )}
+                
+                {currentHoleClubInsights.recommendation && (
+                  <View style={styles.clubRecommendationItem}>
+                    <Text style={styles.clubLabel}>⭐ Best:</Text>
+                    <Text style={[styles.clubName, styles.clubRecommended]}>{currentHoleClubInsights.recommendation.club}</Text>
+                    <Text style={styles.clubImprovement}>
+                      (-{currentHoleClubInsights.recommendation.improvement} strokes)
+                    </Text>
+                    <View style={[
+                      styles.confidenceBadge,
+                      currentHoleClubInsights.recommendation.confidence === 'high' ? styles.confidenceHigh : styles.confidenceMedium
+                    ]}>
+                      <Text style={styles.confidenceText}>
+                        {currentHoleClubInsights.recommendation.confidence}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+          
+          {/* Course Progress */}
+          {courseProgress && playedHoles.length >= 3 && (
+            <View style={styles.statisticsSection}>
+              <Text style={styles.statisticsSectionTitle}>Course Progress</Text>
+              <View style={styles.statisticsGrid}>
+                <View style={styles.statisticsItem}>
+                  <Text style={styles.statisticsLabel}>On Pace For</Text>
+                  <Text style={[
+                    styles.statisticsValue,
+                    courseProgress.improvement ? styles.underPar : styles.evenPar
+                  ]}>
+                    {courseProgress.projectedScore}
+                  </Text>
+                  <Text style={styles.statisticsDetail}>
+                    ({courseProgress.vsHistoricalAvg > 0 ? '+' : ''}{courseProgress.vsHistoricalAvg} vs avg)
+                  </Text>
+                </View>
+                
+                <View style={styles.statisticsItem}>
+                  <Text style={styles.statisticsLabel}>Your Average</Text>
+                  <Text style={styles.statisticsValue}>{courseProgress.avgHistoricalScore}</Text>
+                  <Text style={styles.statisticsDetail}>({historicalData.totalRounds} rounds)</Text>
+                </View>
+                
+                <View style={styles.statisticsItem}>
+                  <Text style={styles.statisticsLabel}>Personal Best</Text>
+                  <Text style={[
+                    styles.statisticsValue,
+                    courseProgress.isOnPaceForPB ? styles.underPar : styles.evenPar
+                  ]}>
+                    {courseProgress.bestHistoricalScore}
+                  </Text>
+                  {courseProgress.isOnPaceForPB && (
+                    <Text style={styles.statisticsDetail}>🎯 PB Chance!</Text>
+                  )}
+                </View>
+              </View>
+              
+              {courseProgress.remainingHoles > 0 && courseProgress.neededForPB > 0 && courseProgress.neededForPB <= 6 && (
+                <View style={styles.progressPBInfo}>
+                  <Text style={styles.progressPBText}>
+                    Average {courseProgress.neededForPB.toFixed(1)} on remaining {courseProgress.remainingHoles} holes for personal best!
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+          
+          {/* Detailed Insights - Always Displayed */}
+          {expandedInsightsData && (
+            <View style={styles.statisticsSection}>
+              <Text style={styles.statisticsSectionTitle}>Detailed Insights</Text>
+              <View style={styles.detailedInsights}>
+                {expandedInsightsData.map((insight, index) => (
+                  <View key={index} style={[
+                    styles.insightItem,
+                    styles[`insight${insight.type.charAt(0).toUpperCase()}${insight.type.slice(1)}`]
+                  ]}>
+                    <View style={styles.insightHeader}>
+                      <Text style={styles.insightIcon}>
+                        {insight.type === 'warning' ? '⚠️' :
+                         insight.type === 'opportunity' ? '🎯' :
+                         insight.type === 'club' ? '🏌️' :
+                         insight.type === 'tip' ? '💡' :
+                         insight.type === 'strategy' ? '🧠' : '📊'}
+                      </Text>
+                      <Text style={styles.insightTitle}>{insight.title}</Text>
+                    </View>
+                    <Text style={styles.insightMessage}>{insight.message}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+            </View>
+          )}
         </View>
       )}
 
@@ -1187,6 +1685,136 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   
+  // Statistics Card Styles
+  statisticsCard: {
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  statisticsCardCollapsed: {
+    backgroundColor: '#f8f9fa',
+  },
+  statisticsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  statisticsHeaderContent: {
+    flex: 1,
+  },
+  statisticsToggleIcon: {
+    fontSize: 16,
+    color: '#2e7d32',
+    fontWeight: 'bold',
+    marginLeft: 12,
+  },
+  statisticsContent: {
+    marginTop: 16,
+  },
+  statisticsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  statisticsSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  statisticsSection: {
+    marginBottom: 16,
+  },
+  statisticsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2e7d32',
+    marginBottom: 12,
+  },
+  statisticsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+  },
+  statisticsItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    minWidth: 80,
+  },
+  statisticsLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginBottom: 4,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  statisticsValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 2,
+  },
+  statisticsVsPar: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  statisticsDetail: {
+    fontSize: 10,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  difficultyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  difficultyIcon: {
+    fontSize: 12,
+  },
+  difficultyText: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '500',
+  },
+  clubRecommendations: {
+    gap: 8,
+  },
+  clubRecommendationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  clubStats: {
+    fontSize: 11,
+    color: '#666',
+  },
+  progressPBInfo: {
+    backgroundColor: '#fff3e0',
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#ff9800',
+  },
+  progressPBText: {
+    fontSize: 12,
+    color: '#f57c00',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  
   // Scroll Container
   scrollContainer: {
     flex: 1,
@@ -1259,6 +1887,104 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
     fontStyle: 'italic',
+  },
+  
+  
+  // Club Styles (within Statistics Card)
+  clubLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1976d2',
+    minWidth: 50,
+  },
+  clubName: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  clubRecommended: {
+    color: '#2e7d32',
+  },
+  clubWarning: {
+    color: '#d32f2f',
+  },
+  clubImprovement: {
+    fontSize: 11,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  clubWarningText: {
+    fontSize: 11,
+    color: '#d32f2f',
+  },
+  confidenceBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 6,
+  },
+  confidenceHigh: {
+    backgroundColor: '#e8f5e8',
+  },
+  confidenceMedium: {
+    backgroundColor: '#fff3e0',
+  },
+  confidenceText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#666',
+    textTransform: 'uppercase',
+  },
+  
+  // Detailed Insights Styles (within Statistics Card)
+  detailedInsights: {
+    gap: 8,
+  },
+  insightItem: {
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 6,
+    borderLeftWidth: 3,
+  },
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  insightIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  insightTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  insightMessage: {
+    fontSize: 12,
+    color: '#555',
+    lineHeight: 16,
+  },
+  // Insight type styles
+  insightWarning: {
+    backgroundColor: '#fff3e0',
+    borderLeftColor: '#ff9800',
+  },
+  insightOpportunity: {
+    backgroundColor: '#e8f5e8',
+    borderLeftColor: '#4caf50',
+  },
+  insightClub: {
+    backgroundColor: '#e3f2fd',
+    borderLeftColor: '#2196f3',
+  },
+  insightTip: {
+    backgroundColor: '#f3e5f5',
+    borderLeftColor: '#9c27b0',
+  },
+  insightStrategy: {
+    backgroundColor: '#fce4ec',
+    borderLeftColor: '#e91e63',
   },
   
   // Score Entry

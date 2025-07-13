@@ -31,9 +31,13 @@ export async function connectDatabase(): Promise<void> {
     await prisma.$queryRaw`SELECT 1`;
     logger.info('Database connection test successful');
     
-    // Check PostGIS extension
-    const postgisCheck = await prisma.$queryRaw`SELECT postgis_version()`;
-    logger.info('PostGIS extension verified:', postgisCheck);
+    // Check PostGIS extension (optional)
+    try {
+      const postgisCheck = await prisma.$queryRaw`SELECT postgis_version()`;
+      logger.info('PostGIS extension verified:', postgisCheck);
+    } catch (error) {
+      logger.warn('PostGIS extension not available - geographic features will be limited');
+    }
     
   } catch (error) {
     logger.error('Failed to connect to database:', error);
