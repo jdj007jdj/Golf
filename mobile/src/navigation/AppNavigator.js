@@ -81,7 +81,6 @@ const AppNavigator = () => {
       const activeRoundData = await AsyncStorage.getItem('golf_active_round');
       if (activeRoundData) {
         const parsedRoundData = JSON.parse(activeRoundData);
-        console.log('Found active round:', parsedRoundData);
         setActiveRound(parsedRoundData);
       }
     } catch (error) {

@@ -1443,3 +1443,257 @@ export const getClubInsightsForScorecard = (holeClubUsage, holeNumber) => {
 
   return insight;
 };
+
+/**
+ * Detect achievements based on current score and historical data
+ * @param {Object} params - Achievement detection parameters
+ * @param {number} params.holeNumber - Current hole number
+ * @param {number} params.score - Score for the hole
+ * @param {Object} params.holePerformance - Historical performance data for all holes
+ * @param {Object} params.courseStats - Overall course statistics
+ * @param {string} params.clubUsed - Club used for the hole (optional)
+ * @param {Object} params.clubData - Historical club usage data
+ * @param {Object} params.currentRoundScores - All scores for current round
+ * @returns {Array} Array of achievement objects
+ */
+export const detectAchievements = (params) => {
+  const {
+    holeNumber,
+    score,
+    holePerformance,
+    courseStats,
+    clubUsed,
+    clubData,
+    currentRoundScores = {}
+  } = params;
+
+  const achievements = [];
+  
+  if (!holePerformance || !holePerformance[holeNumber]) {
+    return achievements;
+  }
+
+  const holeStats = holePerformance[holeNumber];
+  const par = holeStats.par || 4;
+
+  // Personal best on hole
+  if (holeStats.bestScore !== null && score < holeStats.bestScore) {
+    achievements.push({
+      type: 'hole_personal_best',
+      icon: '🎉',
+      title: `New Personal Best on Hole ${holeNumber}!`,
+      description: `Previous best: ${holeStats.bestScore}`,
+      priority: 'high'
+    });
+  }
+
+  // First eagle
+  if (score <= par - 2 && (!holeStats.eagleCount || holeStats.eagleCount === 0)) {
+    achievements.push({
+      type: 'first_eagle_hole',
+      icon: '🦅',
+      title: `First Eagle on Hole ${holeNumber}!`,
+      description: `${par - score} under par!`,
+      priority: 'high'
+    });
+  }
+
+  // Birdie streak
+  const recentHoles = Object.keys(currentRoundScores)
+    .map(h => parseInt(h))
+    .filter(h => h < holeNumber && h >= holeNumber - 3)
+    .sort((a, b) => b - a);
+  
+  if (score < par && recentHoles.length >= 2) {
+    const birdieStreak = recentHoles.every(h => {
+      const hPar = holePerformance[h]?.par || 4;
+      return currentRoundScores[h] < hPar;
+    });
+    
+    if (birdieStreak) {
+      achievements.push({
+        type: 'birdie_streak',
+        icon: '🔥',
+        title: `${recentHoles.length + 1} Birdie Streak!`,
+        description: 'You\'re on fire!',
+        priority: 'medium'
+      });
+    }
+  }
+
+  // Club mastery achievement
+  if (clubUsed && clubData && clubData[holeNumber]) {
+    const clubStats = clubData[holeNumber].clubs?.[clubUsed];
+    if (clubStats) {
+      // First time under par with this club
+      if (score < par && clubStats.scores.filter(s => s < par).length === 0) {
+        achievements.push({
+          type: 'club_mastery',
+          icon: '🏌️',
+          title: `Club Mastery: First under par with ${clubUsed} on Hole ${holeNumber}!`,
+          description: `You've unlocked a new skill!`,
+          priority: 'medium'
+        });
+      }
+      
+      // Best score ever with this club on this hole
+      if (clubStats.bestScore && score < clubStats.bestScore) {
+        achievements.push({
+          type: 'club_improvement',
+          icon: '⭐',
+          title: `Best score ever with ${clubUsed} on this hole!`,
+          description: `Previous best: ${clubStats.bestScore}`,
+          priority: 'low'
+        });
+      }
+    }
+  }
+
+  // Course progress achievements
+  const currentTotal = Object.values(currentRoundScores)
+    .filter(s => typeof s === 'number')
+    .reduce((sum, s) => sum + s, 0) + score;
+  
+  const holesPlayed = Object.keys(currentRoundScores).length + 1;
+  
+  // Check front/back 9 achievements
+  if (holeNumber === 9) {
+    const front9Score = currentTotal;
+    const front9Par = Object.keys(holePerformance)
+      .filter(h => h <= 9)
+      .reduce((sum, h) => sum + (holePerformance[h].par || 4), 0);
+    
+    if (courseStats?.bestFront9 && front9Score < courseStats.bestFront9) {
+      achievements.push({
+        type: 'best_front_9',
+        icon: '🏆',
+        title: 'Best Front 9 Ever!',
+        description: `${front9Score} (${front9Score - front9Par > 0 ? '+' : ''}${front9Score - front9Par})`,
+        priority: 'high'
+      });
+    }
+  }
+  
+  if (holeNumber === 18) {
+    const totalScore = currentTotal;
+    const totalPar = Object.values(holePerformance)
+      .reduce((sum, h) => sum + (h.par || 4), 0);
+    
+    // Personal best round
+    if (courseStats?.bestRound && totalScore < courseStats.bestRound) {
+      achievements.push({
+        type: 'course_record',
+        icon: '🏆',
+        title: 'New Course Record!',
+        description: `${totalScore} (${totalScore - totalPar > 0 ? '+' : ''}${totalScore - totalPar})`,
+        priority: 'high'
+      });
+    }
+    
+    // Breaking milestone scores
+    const milestones = [70, 75, 80, 85, 90, 95, 100];
+    const brokenMilestone = milestones.find(m => 
+      totalScore < m && (!courseStats?.bestRound || courseStats.bestRound >= m)
+    );
+    
+    if (brokenMilestone) {
+      achievements.push({
+        type: 'milestone_broken',
+        icon: '🎯',
+        title: `First time breaking ${brokenMilestone}!`,
+        description: 'A major milestone achieved!',
+        priority: 'high'
+      });
+    }
+  }
+
+  // Improvement trend achievement
+  if (holeStats.trend === 'improving' && holeStats.trendSignificance >= 0.7) {
+    achievements.push({
+      type: 'improvement_trend',
+      icon: '📈',
+      title: `Consistent improvement on Hole ${holeNumber}`,
+      description: `Average improved by ${(holeStats.averageScore - holeStats.recentAverage).toFixed(1)} strokes`,
+      priority: 'low'
+    });
+  }
+
+  return achievements;
+};
+
+/**
+ * Get course statistics for achievement detection
+ * @param {Array} rounds - Historical rounds data
+ * @param {string} courseId - Course ID
+ * @returns {Object} Course statistics
+ */
+export const getCourseStats = (rounds, courseId) => {
+  const courseRounds = filterRoundsByCourse(rounds, courseId);
+  
+  if (!courseRounds || courseRounds.length === 0) {
+    return null;
+  }
+
+  const stats = {
+    roundsPlayed: courseRounds.length,
+    bestRound: null,
+    worstRound: null,
+    averageScore: 0,
+    bestFront9: null,
+    bestBack9: null,
+    eagleCount: 0,
+    birdieCount: 0,
+    parCount: 0
+  };
+
+  courseRounds.forEach(round => {
+    const scores = round.scores || {};
+    const scoreValues = Object.values(scores).filter(s => typeof s === 'number');
+    
+    if (scoreValues.length === 18) { // Complete round
+      const totalScore = scoreValues.reduce((sum, s) => sum + s, 0);
+      
+      if (stats.bestRound === null || totalScore < stats.bestRound) {
+        stats.bestRound = totalScore;
+      }
+      if (stats.worstRound === null || totalScore > stats.worstRound) {
+        stats.worstRound = totalScore;
+      }
+    }
+    
+    // Front 9
+    const front9Scores = Object.entries(scores)
+      .filter(([h, s]) => parseInt(h) <= 9 && typeof s === 'number')
+      .map(([h, s]) => s);
+    
+    if (front9Scores.length === 9) {
+      const front9Total = front9Scores.reduce((sum, s) => sum + s, 0);
+      if (stats.bestFront9 === null || front9Total < stats.bestFront9) {
+        stats.bestFront9 = front9Total;
+      }
+    }
+    
+    // Back 9
+    const back9Scores = Object.entries(scores)
+      .filter(([h, s]) => parseInt(h) > 9 && typeof s === 'number')
+      .map(([h, s]) => s);
+    
+    if (back9Scores.length === 9) {
+      const back9Total = back9Scores.reduce((sum, s) => sum + s, 0);
+      if (stats.bestBack9 === null || back9Total < stats.bestBack9) {
+        stats.bestBack9 = back9Total;
+      }
+    }
+  });
+
+  if (stats.bestRound !== null && stats.worstRound !== null) {
+    stats.averageScore = courseRounds
+      .filter(r => Object.keys(r.scores || {}).length === 18)
+      .reduce((sum, r) => {
+        const total = Object.values(r.scores).reduce((s, score) => s + score, 0);
+        return sum + total;
+      }, 0) / courseRounds.filter(r => Object.keys(r.scores || {}).length === 18).length;
+  }
+
+  return stats;
+};

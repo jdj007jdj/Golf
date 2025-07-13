@@ -144,12 +144,16 @@ const ScorecardScreen = ({ route, navigation }) => {
       }
 
       const roundsData = await response.json();
+      console.log('🔍 API Response rounds count:', roundsData.data?.length);
+      console.log('🔍 First round sample:', JSON.stringify(roundsData.data?.[0], null, 2));
       
       if (roundsData.success && roundsData.data && roundsData.data.length > 0) {
         const rounds = roundsData.data;
         
         // Transform API data to match our coursePerformanceUtils format
         const transformedRounds = rounds.map(round => {
+          console.log('🔍 Processing round:', round.id);
+          console.log('🔍 Round participants:', round.participants);
           
           // Extract scores from participants -> holeScores
           let scores = {};
@@ -158,15 +162,26 @@ const ScorecardScreen = ({ route, navigation }) => {
             const userParticipant = round.participants.find(p => p.userId === round.participants[0].userId); // Assuming single participant for now
             
             if (userParticipant && userParticipant.holeScores) {
+              console.log('🔍 Found holeScores:', userParticipant.holeScores);
+              console.log('🔍 First holeScore sample:', JSON.stringify(userParticipant.holeScores[0], null, 2));
               scores = userParticipant.holeScores.reduce((acc, scoreData) => {
+                console.log('🔍 Processing score:', scoreData);
                 if (scoreData.hole && scoreData.hole.holeNumber && scoreData.score !== null && scoreData.score !== undefined) {
+                  console.log(`🔍 Adding hole ${scoreData.hole.holeNumber}: ${scoreData.score}`);
                   acc[scoreData.hole.holeNumber] = scoreData.score;
+                } else {
+                  console.log('🔍 Skipping score - missing data:', {
+                    holeNumber: scoreData.hole?.holeNumber,
+                    score: scoreData.score
+                  });
                 }
                 return acc;
               }, {});
             }
           }
           
+          console.log('🔍 Extracted scores:', scores);
+          console.log('🔍 Score keys count:', Object.keys(scores).length);
           
           // For testing: Add mock club data to demonstrate functionality
           const mockClubs = {};
@@ -193,6 +208,10 @@ const ScorecardScreen = ({ route, navigation }) => {
           };
         });
         
+        console.log('🔍 Transformed rounds count:', transformedRounds.length);
+        console.log('🔍 Course ID we want:', course.id);
+        console.log('🔍 First transformed round courseId:', transformedRounds[0]?.courseId);
+        console.log('🔍 First transformed round scores keys:', Object.keys(transformedRounds[0]?.scores || {}));
         
         // Filter for completed rounds with scores on this specific course
         const completedRounds = transformedRounds.filter(round => {
@@ -200,11 +219,13 @@ const ScorecardScreen = ({ route, navigation }) => {
           const isCorrectCourse = round.courseId === course.id;
           const isCompleted = round.isCompleted;
           
+          console.log(`🔍 Round ${round.id}: completed=${isCompleted}, correctCourse=${isCorrectCourse}, hasScores=${hasScores}`);
           
           return isCompleted && isCorrectCourse && hasScores;
         });
         
         if (completedRounds.length > 0) {
+          console.log('🔍 completedRounds sample:', JSON.stringify(completedRounds[0], null, 2));
           
           // Calculate hole performance for this course
           const holePerformance = calculateHolePerformance(completedRounds, course);
@@ -310,6 +331,11 @@ const ScorecardScreen = ({ route, navigation }) => {
         putts: puttCount
       };
       
+      console.log('Saving score to backend:', {
+        url: `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ROUNDS}/${round.id}/scores`,
+        body: requestBody,
+        holeNumber: hole.holeNumber,
+      });
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);

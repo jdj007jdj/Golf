@@ -13,14 +13,8 @@ import { API_CONFIG } from '../../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const StartRoundScreen = ({ route, navigation }) => {
-  console.log('=== StartRoundScreen Render ===');
-  console.log('Route params:', route.params);
-  
   const { course } = route.params || {};
   const { token } = useAuth();
-  
-  console.log('Course data:', course);
-  console.log('Token present:', !!token);
   
   const [roundType, setRoundType] = useState('practice');
   const [selectedTeeBox, setSelectedTeeBox] = useState(null);
@@ -45,13 +39,6 @@ const StartRoundScreen = ({ route, navigation }) => {
   }, [teeBoxOptions, selectedTeeBox]);
 
   const handleStartRound = async () => {
-    console.log('=== START ROUND DEBUG ===');
-    console.log('Course:', course.name, course.id);
-    console.log('Selected tee box:', selectedTeeBox);
-    console.log('Round type:', roundType);
-    console.log('Token available:', token ? 'Yes' : 'No');
-    console.log('API URL:', API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.ROUNDS);
-    
     if (!selectedTeeBox) {
       Alert.alert('Error', 'Please select a tee box');
       return;
@@ -65,8 +52,6 @@ const StartRoundScreen = ({ route, navigation }) => {
         roundType,
         startTime: new Date().toISOString(),
       };
-
-      console.log('Creating round with data:', JSON.stringify(roundData, null, 2));
 
       // Create AbortController for request timeout
       const controller = new AbortController();
@@ -84,15 +69,9 @@ const StartRoundScreen = ({ route, navigation }) => {
 
       clearTimeout(timeoutId);
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', JSON.stringify([...response.headers.entries()]));
-
       const data = await response.json();
-      console.log('Round creation response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.success) {
-        console.log('SUCCESS: Navigating to scorecard');
-        
         // Save active round data for resumption
         const activeRoundData = {
           round: data.data,
@@ -102,7 +81,6 @@ const StartRoundScreen = ({ route, navigation }) => {
         
         try {
           await AsyncStorage.setItem('golf_active_round', JSON.stringify(activeRoundData));
-          console.log('Active round saved for resumption');
         } catch (error) {
           console.error('Error saving active round:', error);
         }
@@ -113,7 +91,6 @@ const StartRoundScreen = ({ route, navigation }) => {
           course: course 
         });
       } else {
-        console.log('ERROR: API call failed');
         Alert.alert(
           'Error',
           data.error?.message || data.message || 'Failed to start round. Please try again.'
@@ -133,7 +110,6 @@ const StartRoundScreen = ({ route, navigation }) => {
         );
       }
     } finally {
-      console.log('=== END START ROUND DEBUG ===');
       setLoading(false);
     }
   };

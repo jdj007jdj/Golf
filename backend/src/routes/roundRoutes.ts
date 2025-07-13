@@ -190,7 +190,6 @@ router.get('/:id', authMiddleware, [
  * POST /test - Simple test endpoint
  */
 router.post('/test', (req: Request, res: Response) => {
-  console.log('TEST POST endpoint hit!');
   res.json({
     success: true,
     message: 'POST test works!',
@@ -202,7 +201,6 @@ router.post('/test', (req: Request, res: Response) => {
  * POST /test-auth - Test authMiddleware in isolation
  */
 router.post('/test-auth', authMiddleware, (req: Request, res: Response) => {
-  console.log('AUTH TEST POST endpoint hit!');
   res.json({
     success: true,
     message: 'Auth test works!',
@@ -214,10 +212,6 @@ router.post('/test-auth', authMiddleware, (req: Request, res: Response) => {
  * POST / - Create new round with participant
  */
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
-  console.log('=== ROUNDS POST ROUTE HIT ===');
-  console.log('Request body:', req.body);
-  console.log('User ID:', req.user?.id);
-  
   try {
     const { courseId, teeBoxId, roundType = 'casual' } = req.body;
     const userId = req.user?.id;
@@ -322,10 +316,6 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 router.put('/:id/complete', authMiddleware, [
   param('id').isUUID().withMessage('Invalid round ID')
 ], validateRequest, async (req: Request, res: Response) => {
-  console.log('=== COMPLETE ROUND ENDPOINT HIT ===');
-  console.log('Round ID:', req.params.id);
-  console.log('User ID:', req.user?.id);
-  
   try {
     const { id } = req.params;
     const userId = req.user?.id;
@@ -471,11 +461,6 @@ router.post('/:roundId/scores', authMiddleware, [
   body('strokes').isInt({ min: 1, max: 15 }).withMessage('Strokes must be between 1-15'),
   body('putts').optional({ nullable: true }).isInt({ min: 0, max: 10 }).withMessage('Putts must be between 0-10')
 ], validateRequest, async (req: Request, res: Response) => {
-  console.log('=== SCORE POST ENDPOINT HIT ===');
-  console.log('Round ID:', req.params.roundId);
-  console.log('Request body:', req.body);
-  console.log('User ID:', req.user?.id);
-  
   try {
     const { roundId } = req.params;
     const { holeId, strokes, putts } = req.body;
