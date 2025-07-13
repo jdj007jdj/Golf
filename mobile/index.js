@@ -1,10 +1,7 @@
-/**
- * @file index.js
- * @description React Native entry point
- */
-
 import {AppRegistry} from 'react-native';
-import App from './src/App';
-import {name as appName} from './package.json';
+import React from 'react';
+import {Text} from 'react-native';
 
-AppRegistry.registerComponent(appName, () => App);
+const App = () => <Text style={{fontSize: 50, margin: 50}}>HELLO WORLD 10</Text>;
+
+AppRegistry.registerComponent('MinimalApp', () => App);

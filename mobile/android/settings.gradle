@@ -1,21 +1,6 @@
-pluginManagement {
-    includeBuild("../node_modules/@react-native/gradle-plugin")
-}
-plugins {
-    id("com.facebook.react.settings")
-}
-
-rootProject.name = 'GolfMobile'
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+rootProject.name = 'MinimalApp'
 include ':app'
-
-// React Native autolinking - this includes native module projects
-reactSettings {
-    autolinkLibrariesFromCommand()
-}
-
-if (settings.hasProperty("newArchEnabled") && settings.newArchEnabled == "true") {
-    include(":ReactAndroid")
-    project(":ReactAndroid").projectDir = file('../node_modules/react-native/ReactAndroid')
-    include(":ReactAndroid:hermes-engine")
-    project(":ReactAndroid:hermes-engine").projectDir = file('../node_modules/react-native/ReactAndroid/hermes-engine')
-}
+includeBuild('../node_modules/@react-native/gradle-plugin')
