@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,11 @@ import {
   ScrollView,
   Dimensions,
   Animated,
+  Alert,
+  AppState,
+  ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -18,6 +22,10 @@ const ScorecardScreen = ({ route, navigation }) => {
   const [scores, setScores] = useState({});
   const [currentHole, setCurrentHole] = useState(1);
   const [scoreAnimation] = useState(new Animated.Value(1));
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Storage key for this specific round
+  const STORAGE_KEY = `golf_round_${round?.id || 'temp'}_scores`;
   
   // Get holes from course data, fallback to default 18 holes
   const holes = course.holes || Array.from({ length: 18 }, (_, i) => ({
@@ -25,6 +33,78 @@ const ScorecardScreen = ({ route, navigation }) => {
     holeNumber: i + 1,
     par: i + 1 <= 4 ? 4 : i + 1 <= 10 ? (i + 1) % 2 === 0 ? 5 : 3 : 4, // Mixed pars
   }));
+
+  // Load scores from AsyncStorage on component mount
+  useEffect(() => {
+    loadScores();
+  }, []);
+
+  // Save scores to AsyncStorage whenever scores change
+  useEffect(() => {
+    if (!isLoading) {
+      saveScores();
+    }
+  }, [scores, isLoading]);
+
+  // Handle app state changes (background/foreground)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        // App is going to background, save scores
+        console.log('App backgrounding, saving scores...');
+        saveScores();
+      } else if (nextAppState === 'active') {
+        // App is coming to foreground, reload scores
+        console.log('App foregrounding, reloading scores...');
+        loadScores();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [scores]);
+
+  const loadScores = async () => {
+    try {
+      const savedScores = await AsyncStorage.getItem(STORAGE_KEY);
+      if (savedScores) {
+        const parsedScores = JSON.parse(savedScores);
+        setScores(parsedScores);
+        console.log('Loaded saved scores:', parsedScores);
+      }
+    } catch (error) {
+      console.error('Error loading scores:', error);
+      Alert.alert(
+        'Load Error',
+        'Failed to load saved scores. Starting fresh.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveScores = async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
+      console.log('Scores saved successfully');
+    } catch (error) {
+      console.error('Error saving scores:', error);
+      // Don't show alert for save errors as it would be too disruptive
+    }
+  };
+
+  const clearSavedScores = async () => {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      console.log('Saved scores cleared');
+    } catch (error) {
+      console.error('Error clearing saved scores:', error);
+    }
+  };
 
   const updateScore = (holeNumber, newScore) => {
     // Score validation: must be between 1-15 strokes
@@ -77,6 +157,16 @@ const ScorecardScreen = ({ route, navigation }) => {
     }
   };
 
+  // Show loading indicator while loading scores
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2e7d32" />
+        <Text style={styles.loadingText}>Loading scorecard...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -87,10 +177,7 @@ const ScorecardScreen = ({ route, navigation }) => {
         >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>{course.name}</Text>
-          <Text style={styles.roundType}>{round?.roundType} Round</Text>
-        </View>
+        <Text style={styles.title}>Scorecard</Text>
       </View>
 
       {/* Score Summary */}
@@ -304,6 +391,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
   header: {
     backgroundColor: '#2e7d32',
     padding: 20,
@@ -316,18 +414,10 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
   },
-  headerContent: {
-    alignItems: 'center',
-  },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: 'white',
-  },
-  roundType: {
-    fontSize: 14,
-    color: '#c8e6c9',
-    textTransform: 'capitalize',
   },
   
   // Score Summary

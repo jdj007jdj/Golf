@@ -12,8 +12,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { API_CONFIG } from '../../config/api';
 
 const StartRoundScreen = ({ route, navigation }) => {
-  const { course } = route.params;
+  console.log('=== StartRoundScreen Render ===');
+  console.log('Route params:', route.params);
+  
+  const { course } = route.params || {};
   const { token } = useAuth();
+  
+  console.log('Course data:', course);
+  console.log('Token present:', !!token);
   
   const [roundType, setRoundType] = useState('practice');
   const [selectedTeeBox, setSelectedTeeBox] = useState(null);
