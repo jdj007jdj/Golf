@@ -1,4 +1,4 @@
 import {AppRegistry} from 'react-native';
-import AuthTest from './src/AuthTest';
+import App from './src/App';
 
-AppRegistry.registerComponent('MinimalApp', () => AuthTest);
+AppRegistry.registerComponent('MinimalApp', () => App);
