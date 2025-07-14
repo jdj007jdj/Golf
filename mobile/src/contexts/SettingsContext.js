@@ -23,6 +23,8 @@ export const SettingsProvider = ({ children }) => {
       showHoleProgress: true,
       showScoreSummary: true,
       showClubSelection: false, // Future feature
+      showAchievementNotifications: true, // Phase 2.2.2
+      showSmartClubTracking: true, // Phase 2.2.3
     },
   });
   const [isLoading, setIsLoading] = useState(true);

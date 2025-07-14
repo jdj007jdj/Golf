@@ -39,6 +39,8 @@ const SettingsScreen = ({ navigation }) => {
   const [showQuickScoreButtons, setShowQuickScoreButtons] = useState(settings.scorecard?.showQuickScoreButtons ?? true);
   const [showHoleProgress, setShowHoleProgress] = useState(settings.scorecard?.showHoleProgress ?? true);
   const [showScoreSummary, setShowScoreSummary] = useState(settings.scorecard?.showScoreSummary ?? true);
+  const [showAchievementNotifications, setShowAchievementNotifications] = useState(settings.scorecard?.showAchievementNotifications ?? true);
+  const [showSmartClubTracking, setShowSmartClubTracking] = useState(settings.scorecard?.showSmartClubTracking ?? true);
   
   // Theme Preferences (preparing for future dark mode)
   const [theme, setTheme] = useState(settings.theme);
@@ -85,6 +87,8 @@ const SettingsScreen = ({ navigation }) => {
           showHoleProgress,
           showScoreSummary,
           showClubSelection: false, // Future feature
+          showAchievementNotifications,
+          showSmartClubTracking,
         },
       };
       
@@ -283,6 +287,8 @@ const SettingsScreen = ({ navigation }) => {
           {renderSwitch('Quick Score Buttons', showQuickScoreButtons, setShowQuickScoreButtons, 'Show birdie/par/bogey buttons')}
           {renderSwitch('Hole Progress Bar', showHoleProgress, setShowHoleProgress, 'Show completed holes at bottom')}
           {renderSwitch('Score Summary', showScoreSummary, setShowScoreSummary, 'Show running total and score to par')}
+          {renderSwitch('Achievement Notifications', showAchievementNotifications, setShowAchievementNotifications, 'Show milestone alerts during rounds')}
+          {renderSwitch('Smart Club Tracking', showSmartClubTracking, setShowSmartClubTracking, 'Track and recommend clubs during play')}
         </View>
 
         {/* App Preferences Section */}

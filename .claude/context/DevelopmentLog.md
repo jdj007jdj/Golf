@@ -94,3 +94,95 @@
 - **Impact**: Foundation for intelligent golf coaching and performance analysis
 - Phase: 1.6 COMPLETE
 - Next: Phase 2.0 - Data Sync & Offline Support
+
+## 2025-07-14 21:15:00 - CRITICAL SESSION: APK Build Issues
+
+### Problem Summary
+- **Issue**: Mobile APK builds today cannot connect to backend, but yesterday's APK works fine
+- **Impact**: Development blocked, cannot test new features on device
+- **Urgency**: Critical - affects all mobile development workflow
+
+### Root Cause Analysis
+1. **Network Security Config**: Added `android:networkSecurityConfig="@xml/network_security_config"` to AndroidManifest.xml today
+2. **IP Restriction**: Config only allowed HTTP traffic to old IP (192.168.0.123), not new IP (192.168.0.127)
+3. **Build Differences**: 
+   - Yesterday's working APK: 153MB (all architectures, no network restrictions)
+   - Today's broken APK: 49MB (missing architectures, network restricted)
+
+### Actions Taken
+1. **Network Setup**: ✅ Backend running correctly on WSL2, accessible via Windows browser
+2. **Port Forwarding**: ✅ Configured Windows → WSL2 port proxy for new IP
+3. **Git Revert**: ✅ Reset to yesterday's working commit (bda4a40) from July 13th
+4. **IP Update**: ✅ Updated API_HOST from 192.168.0.123 to 192.168.0.127 in api.js
+5. **Build Attempts**: ❌ Multiple APK build attempts timing out or incomplete
+
+### Current State
+- **Git HEAD**: bda4a40 (July 13th working commit)
+- **Network Config**: Removed (yesterday's state had no restrictions)
+- **Backend**: Running and accessible
+- **Build Status**: Attempting to complete APK build from yesterday's clean state
+
+### Next Steps Required
+1. Complete APK build from yesterday's commit with updated IP
+2. Test new APK connects to backend with new IP address
+3. Once working, carefully investigate what changed today to prevent regression
+
+### Files Modified This Session
+- `/mobile/src/config/api.js` - Updated API_HOST IP address
+- `.claude/context/session.md` - Updated with current crisis
+- `.claude/context/DevelopmentLog.md` - This entry
+
+### Technical Notes
+- WSL2 IP: 172.29.177.0
+- Windows IP: 192.168.0.127 (changed from 192.168.0.123)
+- Backend Port: 3000
+- Metro Port: 8081 (adb reverse configured)
+
+## 2025-07-14 21:40:00 - CRITICAL ISSUE RESOLVED: APK BUILD SUCCESS
+
+### Problem Resolution Summary
+- **Issue**: APK build was broken, producing 49MB non-functional APKs
+- **Root Cause**: Network security config and build cache issues
+- **Solution**: Clean build from yesterday's working commit with updated IP
+- **Result**: Successfully built 150MB functional APK
+
+### Successful Build Process
+1. **Environment Verification**: Confirmed stable versions (RN 0.76.5, Gradle 8.7, Java 17)
+2. **Cache Cleaning**: `./gradlew clean` - cleared all build artifacts (7s)
+3. **Clean Build**: `./gradlew assembleDebug --stacktrace` (4.7 minutes)
+4. **APK Generation**: 150MB APK with all architectures included
+5. **Network Test**: ✅ Successfully connects to backend at 192.168.0.127:3000
+6. **Deployment**: APK copied to C:\Users\Jano\Desktop\golf.apk
+
+### Build Performance Metrics
+- **Total Build Time**: 4 minutes 47 seconds
+- **APK Size**: 150MB (vs broken 49MB)
+- **Architectures**: armeabi-v7a, arm64-v8a, x86, x86_64 ✅
+- **Native Modules**: All compiled successfully
+- **Network Config**: Updated API_HOST to 192.168.0.127 ✅
+
+### Critical Lessons Learned
+1. **Build Process Documentation**: Created MobileBuildProcess.md for future reference
+2. **Environment Stability**: Never change versions mid-project
+3. **Build Time Expectations**: 4-8 minutes is normal for native modules
+4. **APK Size Validation**: <100MB indicates missing architectures
+5. **Clean State**: Always run gradlew clean before troubleshooting
+
+### Files Modified This Session
+- `/mobile/src/config/api.js` - Updated API_HOST IP address
+- `.claude/context/session.md` - Updated crisis resolution status
+- `.claude/context/DevelopmentLog.md` - This entry
+- `.claude/context/MobileBuildProcess.md` - New build documentation
+
+### Development Status
+- **Crisis**: RESOLVED ✅
+- **APK Build**: FUNCTIONAL ✅ 
+- **Network Connectivity**: WORKING ✅
+- **Development Workflow**: RESTORED ✅
+- **Next**: Resume incremental development per IncrementalProjectPlan.md
+
+### Impact
+- Development workflow fully restored after 1.5 hour crisis
+- Build process documented for future troubleshooting
+- Mobile development can now continue with confidence
+- No feature work lost, ready to proceed with Phase 2.2.2

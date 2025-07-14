@@ -30,6 +30,7 @@ const ScorecardScreen = ({ route, navigation }) => {
   // Initialize scores state - one score per hole
   const [scores, setScores] = useState({});
   const [putts, setPutts] = useState({});
+  const [clubs, setClubs] = useState({}); // Track club used per hole
   const [currentHole, setCurrentHole] = useState(1);
   const [scoreAnimation] = useState(new Animated.Value(1));
   const [isLoading, setIsLoading] = useState(true);
@@ -41,6 +42,8 @@ const ScorecardScreen = ({ route, navigation }) => {
   const [showAchievements, setShowAchievements] = useState(false);
   const [currentAchievements, setCurrentAchievements] = useState([]);
   const [courseStats, setCourseStats] = useState(null);
+  const [showClubModal, setShowClubModal] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState({});
   
   // Storage key for this specific round
   const STORAGE_KEY = `golf_round_${round?.id || 'temp'}_scores`;
@@ -51,6 +54,26 @@ const ScorecardScreen = ({ route, navigation }) => {
     holeNumber: i + 1,
     par: i + 1 <= 4 ? 4 : i + 1 <= 10 ? (i + 1) % 2 === 0 ? 5 : 3 : 4, // Mixed pars
   }));
+
+  // Club selection options
+  const CLUB_OPTIONS = [
+    { id: 'driver', name: 'Driver', category: 'woods' },
+    { id: '3wood', name: '3 Wood', category: 'woods' },
+    { id: '5wood', name: '5 Wood', category: 'woods' },
+    { id: 'hybrid', name: 'Hybrid', category: 'hybrids' },
+    { id: '3iron', name: '3 Iron', category: 'irons' },
+    { id: '4iron', name: '4 Iron', category: 'irons' },
+    { id: '5iron', name: '5 Iron', category: 'irons' },
+    { id: '6iron', name: '6 Iron', category: 'irons' },
+    { id: '7iron', name: '7 Iron', category: 'irons' },
+    { id: '8iron', name: '8 Iron', category: 'irons' },
+    { id: '9iron', name: '9 Iron', category: 'irons' },
+    { id: 'pwedge', name: 'PW', category: 'wedges' },
+    { id: 'awedge', name: 'AW', category: 'wedges' },
+    { id: 'swedge', name: 'SW', category: 'wedges' },
+    { id: 'lwedge', name: 'LW', category: 'wedges' },
+    { id: 'putter', name: 'Putter', category: 'putter' }
+  ];
 
   // Load scores and historical data on component mount
   useEffect(() => {
@@ -63,7 +86,7 @@ const ScorecardScreen = ({ route, navigation }) => {
     if (!isLoading) {
       saveScores();
     }
-  }, [scores, putts, isLoading]);
+  }, [scores, putts, clubs, isLoading]);
 
   // Handle app state changes (background/foreground)
   useEffect(() => {
@@ -91,6 +114,7 @@ const ScorecardScreen = ({ route, navigation }) => {
         const parsedScores = JSON.parse(savedScores);
         setScores(parsedScores.scores || parsedScores); // Support old format
         setPutts(parsedScores.putts || {});
+        setClubs(parsedScores.clubs || {}); // Load club selections
       }
     } catch (error) {
       console.error('Error loading scores:', error);
@@ -106,7 +130,7 @@ const ScorecardScreen = ({ route, navigation }) => {
 
   const saveScores = async () => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ scores, putts }));
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ scores, putts, clubs }));
     } catch (error) {
       console.error('Error saving scores:', error);
       // Don't show alert for save errors as it would be too disruptive
@@ -296,6 +320,20 @@ const ScorecardScreen = ({ route, navigation }) => {
     }
   };
 
+  const updateClub = (holeNumber, club) => {
+    setClubs(prev => ({
+      ...prev,
+      [holeNumber]: club
+    }));
+  };
+
+  const toggleCategoryExpansion = (category) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+
   const saveScoreToBackend = async (holeNumber, score, puttCount = null) => {
     try {
       const hole = holes.find(h => h.holeNumber === holeNumber);
@@ -381,6 +419,78 @@ const ScorecardScreen = ({ route, navigation }) => {
     return clubInsights;
   };
 
+  const getSmartClubRecommendations = () => {
+    if (!clubData || !clubData[currentHole]) {
+      // Return default suggestions based on hole par
+      const par = currentHoleData.par;
+      if (par === 3) {
+        return [
+          { id: '7iron', name: '7 Iron', reason: 'Par 3 - typical mid-iron choice', confidence: 'default' },
+          { id: '8iron', name: '8 Iron', reason: 'Shorter par 3', confidence: 'default' },
+          { id: '9iron', name: '9 Iron', reason: 'Short par 3', confidence: 'default' }
+        ];
+      } else if (par === 4) {
+        return [
+          { id: 'driver', name: 'Driver', reason: 'Par 4 - distance off tee', confidence: 'default' },
+          { id: '3wood', name: '3 Wood', reason: 'Controlled distance', confidence: 'default' },
+          { id: 'hybrid', name: 'Hybrid', reason: 'Versatile option', confidence: 'default' }
+        ];
+      } else if (par === 5) {
+        return [
+          { id: 'driver', name: 'Driver', reason: 'Par 5 - maximum distance', confidence: 'default' },
+          { id: '3wood', name: '3 Wood', reason: 'Safe distance option', confidence: 'default' }
+        ];
+      }
+      return [];
+    }
+
+    const holeStats = clubData[currentHole];
+    const recommendations = [];
+
+    // Add most used club
+    if (holeStats.mostUsedClub) {
+      recommendations.push({
+        id: holeStats.mostUsedClub.club,
+        name: CLUB_OPTIONS.find(c => c.id === holeStats.mostUsedClub.club)?.name || holeStats.mostUsedClub.club,
+        reason: `Your usual choice (${holeStats.mostUsedClub.averageScore.toFixed(1)} avg)`,
+        confidence: 'high',
+        isUsual: true
+      });
+    }
+
+    // Add best performing club if different
+    if (holeStats.bestClub && holeStats.bestClub.club !== holeStats.mostUsedClub?.club) {
+      recommendations.push({
+        id: holeStats.bestClub.club,
+        name: CLUB_OPTIONS.find(c => c.id === holeStats.bestClub.club)?.name || holeStats.bestClub.club,
+        reason: `Best performer (${holeStats.bestClub.averageScore.toFixed(1)} avg)`,
+        confidence: holeStats.bestClub.timesUsed >= 3 ? 'high' : 'medium',
+        isBest: true
+      });
+    }
+
+    // Add other frequently used clubs
+    const otherClubs = Object.values(holeStats.clubs || {})
+      .filter(club => 
+        club.timesUsed >= 2 && 
+        club.club !== holeStats.mostUsedClub?.club && 
+        club.club !== holeStats.bestClub?.club
+      )
+      .sort((a, b) => a.averageScore - b.averageScore)
+      .slice(0, 2);
+
+    otherClubs.forEach(club => {
+      recommendations.push({
+        id: club.club,
+        name: CLUB_OPTIONS.find(c => c.id === club.club)?.name || club.club,
+        reason: `Alternative (${club.averageScore.toFixed(1)} avg)`,
+        confidence: 'medium'
+      });
+    });
+
+    return recommendations.slice(0, 4); // Limit to top 4 recommendations
+  };
+
   const getExpandedInsights = () => {
     if (!currentHoleHistorical || !currentHoleClubInsights) {
       return null;
@@ -450,8 +560,10 @@ const ScorecardScreen = ({ route, navigation }) => {
   const currentHoleHistorical = getCurrentHoleHistoricalData();
   const currentHoleClubInsights = getCurrentHoleClubInsights();
   const expandedInsightsData = getExpandedInsights();
+  const smartClubRecommendations = getSmartClubRecommendations();
   const currentScore = scores[currentHole] || 0;
   const currentPutts = putts[currentHole] || 0;
+  const currentClub = clubs[currentHole] || null;
 
   // Calculate running total
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
@@ -521,13 +633,13 @@ const ScorecardScreen = ({ route, navigation }) => {
   const nextHole = () => {
     if (currentHole < holes.length) {
       // Check for achievements if the setting is enabled and we have a score for current hole
-      if (settings.scorecard?.showAchievements !== false && scores[currentHole] > 0 && historicalData) {
+      if (settings.scorecard?.showAchievementNotifications !== false && scores[currentHole] > 0 && historicalData) {
         const achievements = detectAchievements({
           holeNumber: currentHole,
           score: scores[currentHole],
           holePerformance: historicalData.holePerformance,
           courseStats: courseStats,
-          clubUsed: null, // We'll add club tracking in Step 2.2.3
+          clubUsed: clubs[currentHole], // Live club tracking for achievements
           clubData: clubData,
           currentRoundScores: scores
         });
@@ -601,6 +713,7 @@ const ScorecardScreen = ({ route, navigation }) => {
                           roundData: round,
                           course: course,
                           scores: scores,
+                          clubs: clubs,
                           roundType: roundType,
                           holesCompleted: holesCompleted,
                           saveError: true
@@ -619,6 +732,7 @@ const ScorecardScreen = ({ route, navigation }) => {
                 roundData: result.data || round,
                 course: course,
                 scores: scores,
+                clubs: clubs,
                 roundType: roundType,
                 holesCompleted: holesCompleted,
                 saveError: false
@@ -760,6 +874,7 @@ const ScorecardScreen = ({ route, navigation }) => {
                           roundData: round,
                           course: course,
                           scores: scores,
+                          clubs: clubs,
                           roundType: 'Incomplete Round',
                           holesCompleted: Object.keys(scores).length,
                           saveError: true
@@ -778,6 +893,7 @@ const ScorecardScreen = ({ route, navigation }) => {
                 roundData: result.data || round,
                 course: course,
                 scores: scores,
+                clubs: clubs,
                 roundType: 'Incomplete Round',
                 holesCompleted: Object.keys(scores).length,
                 saveError: false
@@ -936,14 +1052,31 @@ const ScorecardScreen = ({ route, navigation }) => {
                 <Text style={styles.settingDescription}>Show achievements when moving between holes</Text>
               </View>
               <Switch
-                value={settings.scorecard?.showAchievements !== false}
+                value={settings.scorecard?.showAchievementNotifications !== false}
                 onValueChange={(value) => {
                   updateSettings({
-                    scorecard: { ...settings.scorecard, showAchievements: value }
+                    scorecard: { ...settings.scorecard, showAchievementNotifications: value }
                   });
                 }}
                 trackColor={{ false: '#E0E0E0', true: '#81C784' }}
-                thumbColor={settings.scorecard?.showAchievements !== false ? '#2E7D32' : '#F5F5F5'}
+                thumbColor={settings.scorecard?.showAchievementNotifications !== false ? '#2E7D32' : '#F5F5F5'}
+              />
+            </View>
+            
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Smart Club Tracking</Text>
+                <Text style={styles.settingDescription}>Track and recommend clubs during play</Text>
+              </View>
+              <Switch
+                value={settings.scorecard?.showSmartClubTracking !== false}
+                onValueChange={(value) => {
+                  updateSettings({
+                    scorecard: { ...settings.scorecard, showSmartClubTracking: value }
+                  });
+                }}
+                trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                thumbColor={settings.scorecard?.showSmartClubTracking !== false ? '#2E7D32' : '#F5F5F5'}
               />
             </View>
           </View>
@@ -1246,6 +1379,32 @@ const ScorecardScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Club Selection */}
+        {settings.scorecard?.showSmartClubTracking !== false && (
+          <View style={styles.clubSelectionCompact}>
+            <TouchableOpacity 
+              style={[styles.clubSelectButton, currentClub && styles.clubSelectButtonSelected]}
+              onPress={() => setShowClubModal(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.clubSelectButtonContent}>
+                <Text style={[styles.clubSelectButtonText, currentClub && styles.clubSelectButtonTextSelected]}>
+                  {currentClub ? 
+                    `🏌️ ${CLUB_OPTIONS.find(c => c.id === currentClub)?.name || currentClub}` : 
+                    '🏌️ Select Club'
+                  }
+                </Text>
+                {smartClubRecommendations.length > 0 && !currentClub && (
+                  <Text style={styles.clubSelectHint}>
+                    Recommended: {smartClubRecommendations[0]?.name}
+                  </Text>
+                )}
+              </View>
+              <Text style={styles.clubSelectArrow}>▸</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Score Entry */}
         <View style={styles.scoreEntry}>
           <View style={styles.scoreHeader}>
@@ -1263,6 +1422,7 @@ const ScorecardScreen = ({ route, navigation }) => {
                 onPress={() => {
                   updateScore(currentHole, 0);
                   setPutts(prev => ({ ...prev, [currentHole]: 0 }));
+                  setClubs(prev => ({ ...prev, [currentHole]: null }));
                 }}
                 activeOpacity={0.7}
               >
@@ -1586,6 +1746,227 @@ const ScorecardScreen = ({ route, navigation }) => {
           setCurrentAchievements([]);
         }}
       />
+
+      {/* Club Selection Modal */}
+      <Modal
+        visible={showClubModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowClubModal(false)}
+        onShow={() => {
+          // Auto-expand categories with recommendations or current selection
+          const categoriesToExpand = {};
+          
+          // Check which category has the current selection
+          if (currentClub) {
+            const selectedClub = CLUB_OPTIONS.find(c => c.id === currentClub);
+            if (selectedClub) {
+              categoriesToExpand[selectedClub.category] = true;
+            }
+          }
+          
+          // Check which categories have recommendations
+          smartClubRecommendations.forEach(rec => {
+            const club = CLUB_OPTIONS.find(c => c.id === rec.id);
+            if (club) {
+              categoriesToExpand[club.category] = true;
+            }
+          });
+          
+          setExpandedCategories(categoriesToExpand);
+        }}
+      >
+        <View style={styles.clubModalContainer}>
+          <View style={styles.clubModalHeader}>
+            <TouchableOpacity 
+              style={styles.clubModalCloseButton}
+              onPress={() => setShowClubModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.clubModalCloseText}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.clubModalTitle}>
+              Select Club - Hole {currentHole}
+            </Text>
+            <View style={styles.clubModalHeaderSpacer} />
+          </View>
+
+          <ScrollView style={styles.clubModalContent} showsVerticalScrollIndicator={false}>
+            {/* Hole Context */}
+            <View style={styles.clubModalHoleInfo}>
+              <Text style={styles.clubModalHoleTitle}>
+                Hole {currentHole} • Par {currentHoleData.par}
+              </Text>
+              {currentHoleData.yardage && (
+                <Text style={styles.clubModalHoleDistance}>
+                  {settings.measurementSystem === 'metric' 
+                    ? `${Math.round(currentHoleData.yardage * 0.9144)}m`
+                    : `${currentHoleData.yardage} yards`
+                  }
+                </Text>
+              )}
+            </View>
+
+            {/* Smart Insights */}
+            {smartClubRecommendations.length > 0 && (
+              <View style={styles.clubModalInsights}>
+                <Text style={styles.clubModalInsightsTitle}>💡 Shot Analysis</Text>
+                
+                {smartClubRecommendations[0]?.isUsual && (
+                  <View style={styles.clubModalInsightCard}>
+                    <Text style={styles.clubModalInsightText}>
+                      You usually use <Text style={styles.clubModalInsightBold}>{smartClubRecommendations[0].name}</Text> on this hole
+                    </Text>
+                    <Text style={styles.clubModalInsightSubtext}>
+                      Average: {smartClubRecommendations.find(r => r.isUsual)?.reason.match(/\d+\.\d+/)?.[0]} strokes
+                    </Text>
+                  </View>
+                )}
+
+                {smartClubRecommendations.find(r => r.isBest) && (
+                  <View style={styles.clubModalInsightCard}>
+                    <Text style={styles.clubModalInsightText}>
+                      ⭐ Best performer: <Text style={styles.clubModalInsightBold}>{smartClubRecommendations.find(r => r.isBest)?.name}</Text>
+                    </Text>
+                    <Text style={styles.clubModalInsightSubtext}>
+                      {smartClubRecommendations.find(r => r.isBest)?.reason}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Generic advice based on par */}
+                <View style={styles.clubModalInsightCard}>
+                  <Text style={styles.clubModalInsightText}>
+                    💭 Strategy: {
+                      currentHoleData.par === 3 ? 'Accuracy over distance - aim for the center of the green' :
+                      currentHoleData.par === 4 ? 'Position for your approach shot' :
+                      'Distance helps - set up for a manageable second shot'
+                    }
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Club Categories */}
+            <View style={styles.clubModalCategories}>
+              {['woods', 'hybrids', 'irons', 'wedges', 'putter'].map(category => {
+                const categoryClubs = CLUB_OPTIONS.filter(club => club.category === category);
+                if (categoryClubs.length === 0) return null;
+
+                const isExpanded = expandedCategories[category];
+                const categoryEmojis = {
+                  woods: '🏌️',
+                  hybrids: '⛳',
+                  irons: '🏌️‍♂️',
+                  wedges: '🎯',
+                  putter: '⚪'
+                };
+
+                // Count selections and recommendations in this category
+                const categoryHasSelection = categoryClubs.some(club => club.id === currentClub);
+                const categoryHasRecommendation = categoryClubs.some(club => 
+                  smartClubRecommendations.find(r => r.id === club.id)
+                );
+
+                return (
+                  <View key={category} style={styles.clubModalCategory}>
+                    <TouchableOpacity 
+                      style={[
+                        styles.clubModalCategoryHeader,
+                        categoryHasSelection && styles.clubModalCategoryHeaderSelected,
+                        categoryHasRecommendation && styles.clubModalCategoryHeaderRecommended
+                      ]}
+                      onPress={() => toggleCategoryExpansion(category)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.clubModalCategoryHeaderLeft}>
+                        <Text style={styles.clubModalCategoryEmoji}>{categoryEmojis[category]}</Text>
+                        <Text style={[
+                          styles.clubModalCategoryTitle,
+                          categoryHasSelection && styles.clubModalCategoryTitleSelected
+                        ]}>
+                          {category.charAt(0).toUpperCase() + category.slice(1)}
+                        </Text>
+                        {categoryHasRecommendation && (
+                          <View style={styles.clubModalCategoryBadge}>
+                            <Text style={styles.clubModalCategoryBadgeText}>★</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[
+                        styles.clubModalCategoryArrow,
+                        isExpanded && styles.clubModalCategoryArrowExpanded
+                      ]}>
+                        ▶
+                      </Text>
+                    </TouchableOpacity>
+
+                    {isExpanded && (
+                      <View style={styles.clubModalCategoryClubs}>
+                        {categoryClubs.map(club => {
+                          const recommendation = smartClubRecommendations.find(r => r.id === club.id);
+                          const isSelected = currentClub === club.id;
+                          
+                          return (
+                            <TouchableOpacity
+                              key={club.id}
+                              style={[
+                                styles.clubModalClubButton,
+                                isSelected && styles.clubModalClubButtonSelected,
+                                recommendation?.isBest && styles.clubModalClubButtonBest,
+                                recommendation?.isUsual && styles.clubModalClubButtonUsual
+                              ]}
+                              onPress={() => {
+                                updateClub(currentHole, club.id);
+                                setShowClubModal(false);
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <View style={styles.clubModalClubButtonContent}>
+                                <Text style={[
+                                  styles.clubModalClubButtonText,
+                                  isSelected && styles.clubModalClubButtonTextSelected
+                                ]}>
+                                  {club.name}
+                                </Text>
+                                {recommendation && (
+                                  <View style={styles.clubModalClubBadges}>
+                                    {recommendation.isBest && <Text style={styles.clubModalClubBadge}>⭐</Text>}
+                                    {recommendation.isUsual && <Text style={styles.clubModalClubBadge}>📈</Text>}
+                                  </View>
+                                )}
+                              </View>
+                              {recommendation && (
+                                <Text style={styles.clubModalClubReason}>
+                                  {recommendation.reason}
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Clear Selection */}
+            {currentClub && (
+              <TouchableOpacity 
+                style={styles.clubModalClearButton}
+                onPress={() => {
+                  updateClub(currentHole, null);
+                  setShowClubModal(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.clubModalClearButtonText}>No Club Selected</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
       
     </View>
   );
@@ -2534,6 +2915,261 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#F44336',
     textAlign: 'center',
+  },
+
+  // Club Selection Styles
+  clubSelectionCompact: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  clubSelectButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  clubSelectButtonSelected: {
+    backgroundColor: '#e8f5e8',
+    borderColor: '#28a745',
+    borderWidth: 2,
+  },
+  clubSelectButtonContent: {
+    flex: 1,
+  },
+  clubSelectButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  clubSelectButtonTextSelected: {
+    color: '#28a745',
+  },
+  clubSelectHint: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  clubSelectArrow: {
+    fontSize: 18,
+    color: '#666',
+    marginLeft: 12,
+  },
+
+  // Club Modal Styles
+  clubModalContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  clubModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  clubModalCloseButton: {
+    padding: 8,
+  },
+  clubModalCloseText: {
+    fontSize: 16,
+    color: '#007bff',
+    fontWeight: '500',
+  },
+  clubModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  clubModalHeaderSpacer: {
+    width: 60,
+  },
+  clubModalContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  clubModalHoleInfo: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  clubModalHoleTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  clubModalHoleDistance: {
+    fontSize: 14,
+    color: '#666',
+  },
+  clubModalInsights: {
+    marginBottom: 24,
+  },
+  clubModalInsightsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  clubModalInsightCard: {
+    backgroundColor: '#fff3e0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9800',
+  },
+  clubModalInsightText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  clubModalInsightBold: {
+    fontWeight: '600',
+    color: '#ff9800',
+  },
+  clubModalInsightSubtext: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  clubModalCategories: {
+    marginBottom: 20,
+  },
+  clubModalCategory: {
+    marginBottom: 8,
+  },
+  clubModalCategoryHeader: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  clubModalCategoryHeaderSelected: {
+    backgroundColor: '#e8f5e8',
+    borderColor: '#28a745',
+  },
+  clubModalCategoryHeaderRecommended: {
+    borderColor: '#ff9800',
+    borderWidth: 2,
+  },
+  clubModalCategoryHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  clubModalCategoryEmoji: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  clubModalCategoryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    textTransform: 'capitalize',
+  },
+  clubModalCategoryTitleSelected: {
+    color: '#28a745',
+  },
+  clubModalCategoryBadge: {
+    backgroundColor: '#ff9800',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  clubModalCategoryBadgeText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  clubModalCategoryArrow: {
+    fontSize: 16,
+    color: '#666',
+    transform: [{ rotate: '0deg' }],
+  },
+  clubModalCategoryArrowExpanded: {
+    transform: [{ rotate: '90deg' }],
+  },
+  clubModalCategoryClubs: {
+    paddingTop: 8,
+    paddingLeft: 16,
+    gap: 8,
+  },
+  clubModalClubButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  clubModalClubButtonSelected: {
+    backgroundColor: '#e8f5e8',
+    borderColor: '#28a745',
+    borderWidth: 2,
+  },
+  clubModalClubButtonBest: {
+    borderColor: '#ff9800',
+    borderWidth: 2,
+  },
+  clubModalClubButtonUsual: {
+    borderColor: '#2196f3',
+    borderWidth: 2,
+  },
+  clubModalClubButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  clubModalClubButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  clubModalClubButtonTextSelected: {
+    color: '#28a745',
+  },
+  clubModalClubBadges: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  clubModalClubBadge: {
+    fontSize: 16,
+  },
+  clubModalClubReason: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  clubModalClearButton: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  clubModalClearButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
   },
 });
 
