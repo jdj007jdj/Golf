@@ -6,6 +6,36 @@
  */
 
 /**
+ * Helper function to extract scores from different round data structures
+ * @param {Object} round - Round object
+ * @returns {Object} Scores object with hole numbers as keys
+ */
+const extractScores = (round) => {
+  // Try round.scores first
+  if (round.scores && Object.keys(round.scores).length > 0) {
+    return round.scores;
+  }
+  
+  // Try round.holes
+  if (round.holes && Object.keys(round.holes).length > 0) {
+    return round.holes;
+  }
+  
+  // Try participants[0].holeScores (API format)
+  if (round.participants?.[0]?.holeScores?.length > 0) {
+    const scores = {};
+    round.participants[0].holeScores.forEach(holeScore => {
+      if (holeScore.hole?.holeNumber) {
+        scores[holeScore.hole.holeNumber] = holeScore.score;
+      }
+    });
+    return scores;
+  }
+  
+  return {};
+};
+
+/**
  * Calculate course averages from historical rounds
  * @param {Array} rounds - Array of completed rounds for a specific course
  * @param {Object} course - Course object with hole information
@@ -26,9 +56,10 @@ export const calculateCourseAverages = (rounds, course) => {
   const coursePar = course?.holes?.reduce((sum, hole) => sum + hole.par, 0) || 72;
   
   // Filter for rounds with at least some scores
-  const roundsWithScores = rounds.filter(round => 
-    round.scores && Object.keys(round.scores).length > 0
-  );
+  const roundsWithScores = rounds.filter(round => {
+    const scores = extractScores(round);
+    return Object.keys(scores).length > 0;
+  });
 
   if (roundsWithScores.length === 0) {
     return {
@@ -48,7 +79,7 @@ export const calculateCourseAverages = (rounds, course) => {
   let partialRounds = 0;
 
   roundsWithScores.forEach(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const roundScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
     const holesPlayed = Object.keys(scores).filter(hole => scores[hole] > 0).length;
     
@@ -97,11 +128,11 @@ export const findBestWorstRounds = (rounds, course) => {
   
   // Only consider rounds with significant scoring (at least 9 holes)
   const validRounds = rounds.filter(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const holesPlayed = Object.keys(scores).filter(hole => scores[hole] > 0).length;
     return holesPlayed >= 9;
   }).map(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
     const holesPlayed = Object.keys(scores).filter(hole => scores[hole] > 0).length;
     const projectedScore = holesPlayed === 18 ? totalScore : Math.round((totalScore / holesPlayed) * 18);
@@ -188,7 +219,7 @@ export const calculateHolePerformance = (rounds, course) => {
 
   // Analyze each round
   rounds.forEach(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     
     Object.keys(scores).forEach(holeNumber => {
       const score = scores[holeNumber];
@@ -272,6 +303,7 @@ export const getCoursePerformanceSummary = (rounds, course) => {
   
   // Find strongest and weakest holes
   const holes = Object.values(holePerformance).filter(hole => hole.timesPlayed > 0);
+  
   const strongestHoles = holes
     .sort((a, b) => a.averageVsPar - b.averageVsPar)
     .slice(0, 3);
@@ -360,7 +392,7 @@ export const filterRoundsByCompletion = (rounds, completionType = 'all') => {
   }
   
   return rounds.filter(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const scoredHoles = Object.keys(scores).filter(hole => scores[hole] > 0);
     const holesPlayed = scoredHoles.length;
     
@@ -554,7 +586,8 @@ export const filterRoundsAdvanced = (rounds, filters = {}) => {
   // Filter by score range
   if (filters.minScore || filters.maxScore) {
     filteredRounds = filteredRounds.filter(round => {
-      const totalScore = Object.values(round.scores || {}).reduce((sum, score) => sum + (score || 0), 0);
+      const scores = extractScores(round);
+      const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
       
       if (filters.minScore && totalScore < filters.minScore) {
         return false;
@@ -605,11 +638,11 @@ export const calculateRollingAverages = (rounds, course, windowSizes = [5, 10, 2
   
   // Only consider rounds with meaningful data (at least 9 holes)
   const validRounds = sortedRounds.filter(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const holesPlayed = Object.keys(scores).filter(hole => scores[hole] > 0).length;
     return holesPlayed >= 9;
   }).map(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
     const holesPlayed = Object.keys(scores).filter(hole => scores[hole] > 0).length;
     const projectedScore = holesPlayed === 18 ? totalScore : Math.round((totalScore / holesPlayed) * 18);
@@ -683,7 +716,7 @@ export const detectPerformanceTrends = (rounds, course) => {
   
   // Prepare score data
   const scoreData = sortedRounds.map((round, index) => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
     const holesPlayed = Object.keys(scores).filter(hole => scores[hole] > 0).length;
     const projectedScore = holesPlayed === 18 ? totalScore : Math.round((totalScore / holesPlayed) * 18);
@@ -1016,7 +1049,7 @@ export const analyzeClubUsage = (rounds, course) => {
 
   // Analyze each round for club usage
   rounds.forEach(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const clubs = round.clubs || {}; // Expected format: { 1: 'driver', 2: '7iron', etc. }
     
     Object.keys(scores).forEach(holeNumber => {
@@ -1105,7 +1138,7 @@ export const analyzeClubPerformanceCorrelation = (rounds, course) => {
   
   // Aggregate overall club performance across all holes
   rounds.forEach(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const clubs = round.clubs || {};
     
     Object.keys(scores).forEach(holeNumber => {
@@ -1647,7 +1680,7 @@ export const getCourseStats = (rounds, courseId) => {
   };
 
   courseRounds.forEach(round => {
-    const scores = round.scores || {};
+    const scores = extractScores(round);
     const scoreValues = Object.values(scores).filter(s => typeof s === 'number');
     
     if (scoreValues.length === 18) { // Complete round

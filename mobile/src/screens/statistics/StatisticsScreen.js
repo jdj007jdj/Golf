@@ -71,7 +71,6 @@ const StatisticsScreen = ({ navigation }) => {
       
       if (roundsResponse.ok) {
         const roundsData = await roundsResponse.json();
-        console.log('API Response:', roundsData); // Debug log
         
         // Handle the API response format (success/data structure)
         let roundsList = [];
@@ -83,7 +82,6 @@ const StatisticsScreen = ({ navigation }) => {
           roundsList = roundsData;
         }
         
-        console.log('Rounds list:', roundsList); // Debug log
         setRounds(roundsList);
         
         // Extract unique courses
@@ -95,25 +93,15 @@ const StatisticsScreen = ({ navigation }) => {
         }, []);
         setCourses(uniqueCourses);
       } else {
-        console.error('API Error:', roundsResponse.status, roundsResponse.statusText);
-        // Try to get error message
-        try {
-          const errorData = await roundsResponse.json();
-          console.error('Error details:', errorData);
-        } catch (e) {
-          console.error('Could not parse error response');
-        }
+        // API error, fall back to local storage
       }
     } catch (error) {
-      console.error('Error loading data:', error);
-      console.error('API URL:', `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ROUNDS}`);
       
       // Try to load from local storage as fallback
       try {
         const localRounds = await AsyncStorage.getItem('golf_round_history');
         if (localRounds) {
           const parsedRounds = JSON.parse(localRounds);
-          console.log('Loaded from local storage:', parsedRounds.length, 'rounds');
           setRounds(parsedRounds);
           
           // Extract unique courses from local data
@@ -126,7 +114,7 @@ const StatisticsScreen = ({ navigation }) => {
           setCourses(uniqueCourses);
         }
       } catch (localError) {
-        console.error('Error loading from local storage:', localError);
+        // Silent fail
       }
     } finally {
       setIsLoading(false);
@@ -162,14 +150,9 @@ const StatisticsScreen = ({ navigation }) => {
   };
 
   const calculateStatistics = () => {
-    console.log('=== calculateStatistics START ===');
-    console.log('Selected course:', selectedCourse?.name || 'None');
-    
     const filteredRounds = getFilteredRounds();
-    console.log('Filtered rounds count:', filteredRounds.length);
     
     if (filteredRounds.length === 0) {
-      console.log('No filtered rounds, clearing all stats');
       setStatistics(null);
       setClubStats(null);
       setPerformanceTrends(null);
@@ -178,40 +161,83 @@ const StatisticsScreen = ({ navigation }) => {
     
     // Calculate overall statistics
     const totalScore = filteredRounds.reduce((sum, round) => {
-      const roundTotal = Object.values(round.holes || {}).reduce((total, score) => total + (score || 0), 0);
+      // Check multiple possible data structures
+      let roundTotal = 0;
+      
+      // Try round.holes first
+      if (round.holes && Object.keys(round.holes).length > 0) {
+        roundTotal = Object.values(round.holes).reduce((total, score) => total + (score || 0), 0);
+      }
+      // Try round.scores
+      else if (round.scores && Object.keys(round.scores).length > 0) {
+        roundTotal = Object.values(round.scores).reduce((total, score) => total + (score || 0), 0);
+      }
+      // Try participants[0].holeScores (as used in RoundHistoryScreen)
+      else if (round.participants?.[0]?.holeScores?.length > 0) {
+        roundTotal = round.participants[0].holeScores.reduce((total, holeScore) => total + (holeScore.score || 0), 0);
+      }
+      
       return sum + roundTotal;
     }, 0);
     
     const averageScore = filteredRounds.length > 0 ? totalScore / filteredRounds.length : 0;
-    console.log('Average score calculated:', averageScore);
     
     // Calculate course-specific stats if a course is selected
     let courseStats = null;
+    let courseWithHoles = selectedCourse;
+    
     if (selectedCourse) {
-      console.log('Calculating course-specific stats for:', selectedCourse.name);
+      // Create a course object with holes if missing
+      if (!selectedCourse.holes || selectedCourse.holes.length === 0) {
+        const defaultHoles = [];
+        for (let i = 1; i <= 18; i++) {
+          defaultHoles.push({
+            holeNumber: i,
+            par: 4, // Default par, will be overridden by actual data if available
+            handicapIndex: i
+          });
+        }
+        courseWithHoles = {
+          ...selectedCourse,
+          holes: defaultHoles
+        };
+      }
+      
       try {
-        courseStats = getCoursePerformanceSummary(filteredRounds, selectedCourse);
-        console.log('Course stats result:', JSON.stringify(courseStats, null, 2));
+        courseStats = getCoursePerformanceSummary(filteredRounds, courseWithHoles);
       } catch (error) {
-        console.error('Error calculating course stats:', error);
+        // Silent fail
       }
     }
     
     // Calculate performance trends
-    console.log('Calculating performance trends...');
-    const trends = selectedCourse 
-      ? detectPerformanceTrends(filteredRounds, selectedCourse)
+    const trends = selectedCourse
+      ? detectPerformanceTrends(filteredRounds, courseWithHoles)
       : null;
-    console.log('Performance trends:', trends);
     
     // Calculate club statistics
-    console.log('Calculating club statistics...');
     const clubAnalysis = selectedCourse
-      ? analyzeClubPerformanceCorrelation(filteredRounds, selectedCourse)
+      ? analyzeClubPerformanceCorrelation(filteredRounds, courseWithHoles)
       : null;
-    console.log('Club analysis keys:', clubAnalysis ? Object.keys(clubAnalysis) : 'null');
     
-    const roundScores = filteredRounds.map(r => Object.values(r.holes || {}).reduce((sum, s) => sum + (s || 0), 0));
+    const roundScores = filteredRounds.map(round => {
+      let roundTotal = 0;
+      
+      // Try round.holes first
+      if (round.holes && Object.keys(round.holes).length > 0) {
+        roundTotal = Object.values(round.holes).reduce((total, score) => total + (score || 0), 0);
+      }
+      // Try round.scores
+      else if (round.scores && Object.keys(round.scores).length > 0) {
+        roundTotal = Object.values(round.scores).reduce((total, score) => total + (score || 0), 0);
+      }
+      // Try participants[0].holeScores (as used in RoundHistoryScreen)
+      else if (round.participants?.[0]?.holeScores?.length > 0) {
+        roundTotal = round.participants[0].holeScores.reduce((total, holeScore) => total + (holeScore.score || 0), 0);
+      }
+      
+      return roundTotal;
+    }).filter(score => score > 0); // Only include rounds with actual scores
     
     const statsObject = {
       totalRounds: filteredRounds.length,
@@ -221,16 +247,9 @@ const StatisticsScreen = ({ navigation }) => {
       courseStats,
     };
     
-    console.log('Setting statistics:', JSON.stringify(statsObject, null, 2));
     setStatistics(statsObject);
-    
-    console.log('Setting performance trends...');
     setPerformanceTrends(trends);
-    
-    console.log('Setting club stats...');
     setClubStats(clubAnalysis);
-    
-    console.log('=== calculateStatistics END ===');
   };
 
   const renderDateRangeButton = () => {
@@ -260,17 +279,18 @@ const StatisticsScreen = ({ navigation }) => {
   };
 
   const renderStatisticsCard = (title, value, subtitle = null, trend = null) => {
-    console.log('renderStatisticsCard:', { title, value, subtitle, trend });
+    // Ensure trend is a valid number, not NaN
+    const validTrend = (trend !== null && !isNaN(trend)) ? trend : null;
     
     return (
       <View style={styles.statCard}>
         <Text style={styles.statTitle}>{title}</Text>
         <Text style={styles.statValue}>{value}</Text>
         {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-        {trend && (
+        {validTrend !== null && (
           <View style={styles.trendContainer}>
-            <Text style={[styles.trendText, { color: trend > 0 ? '#d32f2f' : '#2e7d32' }]}>
-              {trend > 0 ? '▲' : '▼'} {Math.abs(trend || 0).toFixed(1)}
+            <Text style={[styles.trendText, { color: validTrend > 0 ? '#d32f2f' : '#2e7d32' }]}>
+              {validTrend > 0 ? '▲' : '▼'} {Math.abs(validTrend).toFixed(1)}
             </Text>
           </View>
         )}
@@ -302,14 +322,8 @@ const StatisticsScreen = ({ navigation }) => {
       </View>
       
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {console.log('=== MAIN RENDER START ===')}
-        {console.log('Statistics state:', statistics)}
-        {console.log('Selected course:', selectedCourse?.name)}
-        {(() => {
-          try {
-            if (statistics && statistics.totalRounds > 0) {
-              return (
-                <>
+        {statistics && statistics.totalRounds > 0 ? (
+          <>
             {/* Overview Stats */}
             <View style={styles.overviewSection}>
               <Text style={styles.sectionTitle}>Overview</Text>
@@ -341,35 +355,30 @@ const StatisticsScreen = ({ navigation }) => {
             {/* Performance Trends */}
             {performanceTrends && (
               <View style={styles.section}>
-                {console.log('=== Rendering Performance Trends ===')}
-                {console.log('performanceTrends:', performanceTrends)}
                 <Text style={styles.sectionTitle}>Performance Trends</Text>
                 <View style={styles.trendCard}>
                   <Text style={styles.trendLabel}>
                     Current Trend: {performanceTrends.trend || 'Unknown'}
                   </Text>
-                  {performanceTrends.improvement !== 0 && (
+                  {performanceTrends.improvement !== 0 && !isNaN(performanceTrends.improvement) && (
                     <Text style={[
                       styles.trendValue,
                       { color: performanceTrends.improvement > 0 ? '#d32f2f' : '#2e7d32' }
                     ]}>
-                      {console.log('Trend improvement value:', performanceTrends.improvement)}
-                      {performanceTrends.improvement > 0 ? '+' : ''}{(performanceTrends.improvement || 0).toFixed(1)} strokes
+                      {performanceTrends.improvement > 0 ? '+' : ''}{performanceTrends.improvement.toFixed(1)} strokes
                     </Text>
                   )}
                   <Text style={styles.trendDescription}>
-                    {console.log('Trend description:', performanceTrends.description)}
-                    {performanceTrends.description || 'No trend data available'}
+                    {performanceTrends.analysis || 'No trend data available'}
                   </Text>
                   <View style={styles.confidenceContainer}>
                     <Text style={styles.confidenceLabel}>Confidence: </Text>
                     <Text style={[
                       styles.confidenceValue,
-                      { color: (performanceTrends.confidenceRating || '').toLowerCase() === 'high' ? '#2e7d32' : 
-                               (performanceTrends.confidenceRating || '').toLowerCase() === 'medium' ? '#ff9800' : '#f44336' }
+                      { color: (performanceTrends.confidence || '').toLowerCase() === 'high' ? '#2e7d32' : 
+                               (performanceTrends.confidence || '').toLowerCase() === 'medium' ? '#ff9800' : '#f44336' }
                     ]}>
-                      {console.log('Confidence rating:', performanceTrends.confidenceRating)}
-                      {(performanceTrends.confidenceRating || 'unknown').toUpperCase()}
+                      {(performanceTrends.confidence || 'unknown').toUpperCase()}
                     </Text>
                   </View>
                 </View>
@@ -379,15 +388,12 @@ const StatisticsScreen = ({ navigation }) => {
             {/* Club Performance */}
             {clubStats && clubStats.overallClubStats && Object.keys(clubStats.overallClubStats).length > 0 && (
               <View style={styles.section}>
-                {console.log('=== Rendering Club Performance ===')}
-                {console.log('clubStats.overallClubStats:', clubStats.overallClubStats)}
                 <Text style={styles.sectionTitle}>Club Performance</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   {Object.entries(clubStats.overallClubStats)
                     .sort((a, b) => b[1].totalUses - a[1].totalUses)
                     .slice(0, 5)
                     .map(([club, stats]) => {
-                      console.log('Rendering club:', club, 'with stats:', stats);
                       return (
                         <View key={club} style={styles.clubCard}>
                           <Text style={styles.clubName}>{(club || '').toUpperCase()}</Text>
@@ -403,38 +409,26 @@ const StatisticsScreen = ({ navigation }) => {
             {/* Course-specific Stats */}
             {statistics.courseStats && (
               <View style={styles.section}>
-                {console.log('=== Rendering Course-specific Stats ===')}
-                {console.log('courseStats:', JSON.stringify(statistics.courseStats, null, 2))}
-                
                 <Text style={styles.sectionTitle}>Course Performance</Text>
                 <View style={styles.courseStatsContainer}>
                   <View style={styles.courseStatRow}>
                     <Text style={styles.courseStatLabel}>Course Average:</Text>
-                    {console.log('Course Average value:', statistics.courseStats.courseAverages?.averageScore)}
                     <Text style={styles.courseStatValue}>
                       {statistics.courseStats.courseAverages?.averageScore ? statistics.courseStats.courseAverages.averageScore.toFixed(1) : '0'}
                     </Text>
                   </View>
                   <View style={styles.courseStatRow}>
                     <Text style={styles.courseStatLabel}>Best Holes:</Text>
-                    {console.log('Strongest holes:', statistics.courseStats.strongestHoles)}
-                    {console.log('Strongest holes type:', typeof statistics.courseStats.strongestHoles)}
-                    {console.log('Is array?', Array.isArray(statistics.courseStats.strongestHoles))}
                     <Text style={styles.courseStatValue}>
                       {(statistics.courseStats.strongestHoles || []).map(h => {
-                        console.log('Processing strongest hole:', h);
                         return `#${h.holeNumber}`;
                       }).join(', ') || 'None'}
                     </Text>
                   </View>
                   <View style={styles.courseStatRowLast}>
                     <Text style={styles.courseStatLabel}>Worst Holes:</Text>
-                    {console.log('Weakest holes:', statistics.courseStats.weakestHoles)}
-                    {console.log('Weakest holes type:', typeof statistics.courseStats.weakestHoles)}
-                    {console.log('Is array?', Array.isArray(statistics.courseStats.weakestHoles))}
                     <Text style={styles.courseStatValue}>
                       {(statistics.courseStats.weakestHoles || []).map(h => {
-                        console.log('Processing weakest hole:', h);
                         return `#${h.holeNumber}`;
                       }).join(', ') || 'None'}
                     </Text>
@@ -442,45 +436,23 @@ const StatisticsScreen = ({ navigation }) => {
                 </View>
               </View>
             )}
-                </>
-              );
-            } else {
-              return (
-                <View style={styles.emptyContainer}>
+          </>
+        ) : (
+          <View style={styles.emptyContainer}>
                   <Text style={styles.emptyText}>No statistics available</Text>
                   <Text style={styles.emptySubtext}>
                     {selectedCourse 
                       ? `No rounds found for ${selectedCourse.name} in this time period`
                       : 'Start playing rounds to see your statistics'}
                   </Text>
-                  <TouchableOpacity 
-                    style={styles.startRoundButton}
-                    onPress={() => navigation.navigate('CourseList')}
-                  >
-                    <Text style={styles.startRoundButtonText}>Start a Round</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            }
-          } catch (error) {
-            console.error('=== RENDER ERROR ===');
-            console.error('Error during render:', error);
-            console.error('Error stack:', error.stack);
-            console.error('Current state when error occurred:');
-            console.error('statistics:', statistics);
-            console.error('selectedCourse:', selectedCourse);
-            console.error('performanceTrends:', performanceTrends);
-            console.error('clubStats:', clubStats);
-            
-            return (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Error rendering statistics</Text>
-                <Text style={styles.emptySubtext}>Check console for details</Text>
-              </View>
-            );
-          }
-        })()}
-        {console.log('=== MAIN RENDER END ===')}
+            <TouchableOpacity 
+              style={styles.startRoundButton}
+              onPress={() => navigation.navigate('CourseList')}
+            >
+              <Text style={styles.startRoundButtonText}>Start a Round</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
       
       {/* Date Range Modal */}
@@ -560,10 +532,6 @@ const StatisticsScreen = ({ navigation }) => {
                   selectedCourse?.id === course.id && styles.modalOptionSelected
                 ]}
                 onPress={() => {
-                  console.log('=== Course Selected ===');
-                  console.log('Course:', course.name);
-                  console.log('Course ID:', course.id);
-                  console.log('Full course object:', JSON.stringify(course, null, 2));
                   setSelectedCourse(course);
                   setShowCourseModal(false);
                 }}
