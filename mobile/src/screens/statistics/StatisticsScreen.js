@@ -327,10 +327,10 @@ const StatisticsScreen = ({ navigation }) => {
                     <Text style={styles.confidenceLabel}>Confidence: </Text>
                     <Text style={[
                       styles.confidenceValue,
-                      { color: performanceTrends.confidenceRating === 'high' ? '#2e7d32' : 
-                               performanceTrends.confidenceRating === 'medium' ? '#ff9800' : '#f44336' }
+                      { color: (performanceTrends.confidenceRating || '').toLowerCase() === 'high' ? '#2e7d32' : 
+                               (performanceTrends.confidenceRating || '').toLowerCase() === 'medium' ? '#ff9800' : '#f44336' }
                     ]}>
-                      {performanceTrends.confidenceRating.toUpperCase()}
+                      {(performanceTrends.confidenceRating || 'unknown').toUpperCase()}
                     </Text>
                   </View>
                 </View>
@@ -347,7 +347,7 @@ const StatisticsScreen = ({ navigation }) => {
                     .slice(0, 5)
                     .map(([club, stats]) => (
                       <View key={club} style={styles.clubCard}>
-                        <Text style={styles.clubName}>{club.toUpperCase()}</Text>
+                        <Text style={styles.clubName}>{(club || '').toUpperCase()}</Text>
                         <Text style={styles.clubStat}>Avg: {stats.averageScore.toFixed(1)}</Text>
                         <Text style={styles.clubUses}>{stats.totalUses} uses</Text>
                       </View>
