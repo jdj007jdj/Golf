@@ -220,7 +220,7 @@ const ScorecardScreen = ({ route, navigation }) => {
         
         
         // Filter for completed rounds with scores on this specific course
-        const completedRounds = transformedRounds.filter(round => {
+        let completedRounds = transformedRounds.filter(round => {
           const hasScores = Object.keys(round.scores).length > 0;
           const isCorrectCourse = round.courseId === course.id;
           const isCompleted = round.isCompleted;
@@ -228,6 +228,13 @@ const ScorecardScreen = ({ route, navigation }) => {
           
           return isCompleted && isCorrectCourse && hasScores;
         });
+        
+        // Apply historical timeframe filter
+        const timeframe = settings.scorecard?.historicalTimeframe || '10';
+        if (timeframe !== 'all') {
+          const limit = parseInt(timeframe);
+          completedRounds = completedRounds.slice(0, limit);
+        }
         
         if (completedRounds.length > 0) {
           
@@ -421,6 +428,14 @@ const ScorecardScreen = ({ route, navigation }) => {
   };
 
   const getSmartClubRecommendations = () => {
+    // Check if club recommendations are enabled
+    if (settings.scorecard?.enableClubRecommendations === false) {
+      return [];
+    }
+    
+    const confidenceThreshold = settings.scorecard?.clubConfidenceThreshold || 'medium';
+    const confidenceLevels = { low: 1, medium: 2, high: 3, default: 0 };
+    
     if (!clubData || !clubData[currentHole]) {
       // Return default suggestions based on hole par
       const par = currentHoleData.par;
@@ -489,7 +504,14 @@ const ScorecardScreen = ({ route, navigation }) => {
       });
     });
 
-    return recommendations.slice(0, 4); // Limit to top 4 recommendations
+    // Filter recommendations based on confidence threshold
+    const filteredRecommendations = recommendations.filter(rec => {
+      const recConfidenceLevel = confidenceLevels[rec.confidence] || 0;
+      const thresholdLevel = confidenceLevels[confidenceThreshold];
+      return recConfidenceLevel >= thresholdLevel;
+    });
+    
+    return filteredRecommendations.slice(0, 4); // Limit to top 4 recommendations
   };
 
   const getExpandedInsights = () => {
@@ -654,6 +676,25 @@ const ScorecardScreen = ({ route, navigation }) => {
 
   const nextHole = () => {
     if (currentHole < holes.length) {
+      // Check if club tracking reminder is enabled and club not selected
+      if (settings.scorecard?.clubTrackingReminder !== false && 
+          settings.scorecard?.showSmartClubTracking !== false && 
+          scores[currentHole] > 0 && 
+          !clubs[currentHole]) {
+        Alert.alert(
+          'Club Not Selected',
+          'Would you like to record which club you used on this hole?',
+          [
+            { text: 'Skip', style: 'cancel' },
+            { 
+              text: 'Select Club', 
+              onPress: () => setShowClubModal(true)
+            }
+          ]
+        );
+        return;
+      }
+      
       // Check for achievements if the setting is enabled and we have a score for current hole
       if (settings.scorecard?.showAchievementNotifications !== false && scores[currentHole] > 0 && historicalData) {
         const achievements = detectAchievements({
@@ -1135,12 +1176,96 @@ const ScorecardScreen = ({ route, navigation }) => {
                           insightDetailLevel: settings.scorecard?.insightDetailLevel || 'standard',
                           showAchievementNotifications: settings.scorecard?.showAchievementNotifications !== false,
                           showSmartClubTracking: settings.scorecard?.showSmartClubTracking !== false,
+                          enableClubRecommendations: settings.scorecard?.enableClubRecommendations !== false,
+                          clubConfidenceThreshold: settings.scorecard?.clubConfidenceThreshold || 'medium',
+                          autoSuggestByDistance: settings.scorecard?.autoSuggestByDistance !== false,
+                          clubTrackingReminder: settings.scorecard?.clubTrackingReminder !== false,
+                          comparisonMode: settings.scorecard?.comparisonMode || 'personal',
+                          historicalTimeframe: settings.scorecard?.historicalTimeframe || '10',
+                          highTrendSensitivity: settings.scorecard?.highTrendSensitivity === true,
                         };
                         AsyncStorage.setItem(`course_settings_${course.id}`, JSON.stringify(courseSettings));
                       }
                     }}
                     trackColor={{ false: '#E0E0E0', true: '#81C784' }}
                     thumbColor={settings.scorecard?.rememberCourseSettings !== false ? '#2E7D32' : '#F5F5F5'}
+                  />
+                </View>
+
+                <View style={styles.settingDivider} />
+
+                <Text style={styles.settingSubheading}>Performance Comparison</Text>
+
+                <View style={styles.settingRowCompact}>
+                  <Text style={styles.settingLabel}>Compare To</Text>
+                  <Text style={styles.settingDescription}>Select your performance baseline</Text>
+                  <View style={styles.insightLevelSelector}>
+                    {['personal', 'course', 'handicap'].map((mode) => (
+                      <TouchableOpacity
+                        key={mode}
+                        style={[
+                          styles.insightLevelOption,
+                          (settings.scorecard?.comparisonMode || 'personal') === mode && styles.insightLevelOptionSelected
+                        ]}
+                        onPress={() => {
+                          updateSettings({
+                            scorecard: { ...settings.scorecard, comparisonMode: mode }
+                          });
+                        }}
+                      >
+                        <Text style={[
+                          styles.insightLevelText,
+                          (settings.scorecard?.comparisonMode || 'personal') === mode && styles.insightLevelTextSelected
+                        ]}>
+                          {mode === 'personal' ? 'Personal' : mode === 'course' ? 'Course' : 'Handicap'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.settingRowCompact}>
+                  <Text style={styles.settingLabel}>Historical Timeframe</Text>
+                  <Text style={styles.settingDescription}>Rounds to include in calculations</Text>
+                  <View style={styles.insightLevelSelector}>
+                    {['5', '10', 'all'].map((timeframe) => (
+                      <TouchableOpacity
+                        key={timeframe}
+                        style={[
+                          styles.insightLevelOption,
+                          (settings.scorecard?.historicalTimeframe || '10') === timeframe && styles.insightLevelOptionSelected
+                        ]}
+                        onPress={() => {
+                          updateSettings({
+                            scorecard: { ...settings.scorecard, historicalTimeframe: timeframe }
+                          });
+                        }}
+                      >
+                        <Text style={[
+                          styles.insightLevelText,
+                          (settings.scorecard?.historicalTimeframe || '10') === timeframe && styles.insightLevelTextSelected
+                        ]}>
+                          {timeframe === 'all' ? 'All' : `Last ${timeframe}`}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLabelContainer}>
+                    <Text style={styles.settingLabel}>Trend Sensitivity</Text>
+                    <Text style={styles.settingDescription}>How quickly trends are detected</Text>
+                  </View>
+                  <Switch
+                    value={settings.scorecard?.highTrendSensitivity === true}
+                    onValueChange={(value) => {
+                      updateSettings({
+                        scorecard: { ...settings.scorecard, highTrendSensitivity: value }
+                      });
+                    }}
+                    trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                    thumbColor={settings.scorecard?.highTrendSensitivity === true ? '#2E7D32' : '#F5F5F5'}
                   />
                 </View>
               </View>
@@ -1179,6 +1304,90 @@ const ScorecardScreen = ({ route, navigation }) => {
                 thumbColor={settings.scorecard?.showSmartClubTracking !== false ? '#2E7D32' : '#F5F5F5'}
               />
             </View>
+
+            {/* Smart Club Tracking Subsection */}
+            {settings.scorecard?.showSmartClubTracking !== false && (
+              <View style={styles.settingSubsection}>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLabelContainer}>
+                    <Text style={styles.settingLabel}>Club Recommendations</Text>
+                    <Text style={styles.settingDescription}>Show club suggestions for each hole</Text>
+                  </View>
+                  <Switch
+                    value={settings.scorecard?.enableClubRecommendations !== false}
+                    onValueChange={(value) => {
+                      updateSettings({
+                        scorecard: { ...settings.scorecard, enableClubRecommendations: value }
+                      });
+                    }}
+                    trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                    thumbColor={settings.scorecard?.enableClubRecommendations !== false ? '#2E7D32' : '#F5F5F5'}
+                  />
+                </View>
+
+                <View style={styles.settingRowCompact}>
+                  <Text style={styles.settingLabel}>Recommendation Confidence</Text>
+                  <Text style={styles.settingDescription}>Minimum confidence level for club suggestions</Text>
+                  <View style={styles.insightLevelSelector}>
+                    {['low', 'medium', 'high'].map((level) => (
+                      <TouchableOpacity
+                        key={level}
+                        style={[
+                          styles.insightLevelOption,
+                          (settings.scorecard?.clubConfidenceThreshold || 'medium') === level && styles.insightLevelOptionSelected
+                        ]}
+                        onPress={() => {
+                          updateSettings({
+                            scorecard: { ...settings.scorecard, clubConfidenceThreshold: level }
+                          });
+                        }}
+                      >
+                        <Text style={[
+                          styles.insightLevelText,
+                          (settings.scorecard?.clubConfidenceThreshold || 'medium') === level && styles.insightLevelTextSelected
+                        ]}>
+                          {level.charAt(0).toUpperCase() + level.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLabelContainer}>
+                    <Text style={styles.settingLabel}>Auto-Suggest by Distance</Text>
+                    <Text style={styles.settingDescription}>Suggest clubs based on hole distance</Text>
+                  </View>
+                  <Switch
+                    value={settings.scorecard?.autoSuggestByDistance !== false}
+                    onValueChange={(value) => {
+                      updateSettings({
+                        scorecard: { ...settings.scorecard, autoSuggestByDistance: value }
+                      });
+                    }}
+                    trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                    thumbColor={settings.scorecard?.autoSuggestByDistance !== false ? '#2E7D32' : '#F5F5F5'}
+                  />
+                </View>
+
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLabelContainer}>
+                    <Text style={styles.settingLabel}>Club Tracking Reminder</Text>
+                    <Text style={styles.settingDescription}>Remind to select club if not entered</Text>
+                  </View>
+                  <Switch
+                    value={settings.scorecard?.clubTrackingReminder !== false}
+                    onValueChange={(value) => {
+                      updateSettings({
+                        scorecard: { ...settings.scorecard, clubTrackingReminder: value }
+                      });
+                    }}
+                    trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                    thumbColor={settings.scorecard?.clubTrackingReminder !== false ? '#2E7D32' : '#F5F5F5'}
+                  />
+                </View>
+              </View>
+            )}
           </View>
           
           {/* Round Actions Section */}
@@ -1281,7 +1490,11 @@ const ScorecardScreen = ({ route, navigation }) => {
           {/* Hole Historical Data - Show in all detail levels */}
           {currentHoleHistorical && (
             <View style={styles.statisticsSection}>
-              <Text style={styles.statisticsSectionTitle}>Your Performance</Text>
+              <Text style={styles.statisticsSectionTitle}>
+                {settings.scorecard?.comparisonMode === 'course' ? 'Course Comparison' :
+                 settings.scorecard?.comparisonMode === 'handicap' ? 'Handicap Performance' :
+                 'Your Performance'}
+              </Text>
               <View style={styles.statisticsGrid}>
                 <View style={styles.statisticsItem}>
                   <Text style={styles.statisticsLabel}>Average Score</Text>
@@ -2991,6 +3204,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 8,
     paddingVertical: 4,
+  },
+  settingDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginHorizontal: 16,
+    marginVertical: 12,
+  },
+  settingSubheading: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666666',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    marginTop: 4,
   },
   settingLabelContainer: {
     flex: 1,
