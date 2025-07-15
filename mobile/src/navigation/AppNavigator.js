@@ -18,6 +18,7 @@ import ScorecardScreen from '../screens/rounds/ScorecardScreen';
 import RoundSummaryScreen from '../screens/rounds/RoundSummaryScreen';
 import RoundHistoryScreen from '../screens/rounds/RoundHistoryScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
+import StatisticsScreen from '../screens/statistics/StatisticsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -58,6 +59,7 @@ const MainStack = ({ initialRouteName, initialParams }) => {
       <Stack.Screen name="RoundSummary" component={RoundSummaryScreen} />
       <Stack.Screen name="RoundHistory" component={RoundHistoryScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Statistics" component={StatisticsScreen} />
     </Stack.Navigator>
   );
 };

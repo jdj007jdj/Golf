@@ -101,10 +101,12 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.actionDescription}>View your past rounds</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('Statistics')}
+          >
             <Text style={styles.actionTitle}>Statistics</Text>
             <Text style={styles.actionDescription}>Track your progress</Text>
-            <Text style={styles.comingSoon}>Coming soon!</Text>
           </TouchableOpacity>
         </View>
         
