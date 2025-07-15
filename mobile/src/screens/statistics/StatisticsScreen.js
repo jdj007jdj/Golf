@@ -366,19 +366,19 @@ const StatisticsScreen = ({ navigation }) => {
                   <View style={styles.courseStatRow}>
                     <Text style={styles.courseStatLabel}>Course Average:</Text>
                     <Text style={styles.courseStatValue}>
-                      {statistics.courseStats.averageScore ? statistics.courseStats.averageScore.toFixed(1) : '0'}
+                      {statistics.courseStats.courseAverages?.averageScore ? statistics.courseStats.courseAverages.averageScore.toFixed(1) : '0'}
                     </Text>
                   </View>
                   <View style={styles.courseStatRow}>
                     <Text style={styles.courseStatLabel}>Best Holes:</Text>
                     <Text style={styles.courseStatValue}>
-                      {statistics.courseStats.bestHoles.map(h => `#${h.holeNumber}`).join(', ')}
+                      {(statistics.courseStats.strongestHoles || []).map(h => `#${h.holeNumber}`).join(', ')}
                     </Text>
                   </View>
                   <View style={styles.courseStatRow}>
                     <Text style={styles.courseStatLabel}>Worst Holes:</Text>
                     <Text style={styles.courseStatValue}>
-                      {statistics.courseStats.worstHoles.map(h => `#${h.holeNumber}`).join(', ')}
+                      {(statistics.courseStats.weakestHoles || []).map(h => `#${h.holeNumber}`).join(', ')}
                     </Text>
                   </View>
                 </View>
