@@ -55,7 +55,7 @@ const StatisticsScreen = ({ navigation }) => {
       setIsLoading(true);
       
       // Load rounds from API
-      const roundsResponse = await fetch(`${API_CONFIG.BASE_URL}/rounds`, {
+      const roundsResponse = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ROUNDS}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -99,7 +99,7 @@ const StatisticsScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      console.error('API URL:', `${API_CONFIG.BASE_URL}/rounds`);
+      console.error('API URL:', `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ROUNDS}`);
       
       // Try to load from local storage as fallback
       try {
