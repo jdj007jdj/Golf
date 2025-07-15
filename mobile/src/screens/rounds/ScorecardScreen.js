@@ -79,6 +79,7 @@ const ScorecardScreen = ({ route, navigation }) => {
   useEffect(() => {
     loadScores();
     loadHistoricalData();
+    loadCourseSettings();
   }, []);
 
   // Save scores to AsyncStorage whenever scores change
@@ -630,6 +631,27 @@ const ScorecardScreen = ({ route, navigation }) => {
   const canFinishBack9 = back9Complete && !front9HasScores; // Only if no front 9 scores entered
   const canFinishRound = front9Complete || back9Complete || isRoundComplete;
 
+  // Load course-specific settings if enabled
+  const loadCourseSettings = async () => {
+    try {
+      if (settings.scorecard?.rememberCourseSettings !== false && course?.id) {
+        const savedSettings = await AsyncStorage.getItem(`course_settings_${course.id}`);
+        if (savedSettings) {
+          const courseSettings = JSON.parse(savedSettings);
+          // Apply course-specific settings
+          updateSettings({
+            scorecard: {
+              ...settings.scorecard,
+              ...courseSettings
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.log('Error loading course settings:', error);
+    }
+  };
+
   const nextHole = () => {
     if (currentHole < holes.length) {
       // Check for achievements if the setting is enabled and we have a score for current hole
@@ -1046,6 +1068,84 @@ const ScorecardScreen = ({ route, navigation }) => {
               />
             </View>
 
+            {/* Historical Insights Subsection */}
+            {settings.scorecard?.showHistoricalInsights !== false && (
+              <View style={styles.settingSubsection}>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLabelContainer}>
+                    <Text style={styles.settingLabel}>Show Averages</Text>
+                    <Text style={styles.settingDescription}>Display your average scores</Text>
+                  </View>
+                  <Switch
+                    value={settings.scorecard?.showHistoricalAverages !== false}
+                    onValueChange={(value) => {
+                      updateSettings({
+                        scorecard: { ...settings.scorecard, showHistoricalAverages: value }
+                      });
+                    }}
+                    trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                    thumbColor={settings.scorecard?.showHistoricalAverages !== false ? '#2E7D32' : '#F5F5F5'}
+                  />
+                </View>
+
+                <View style={styles.settingRowCompact}>
+                  <Text style={styles.settingLabel}>Detail Level</Text>
+                  <Text style={styles.settingDescription}>Amount of information to display</Text>
+                  <View style={styles.insightLevelSelector}>
+                    {['minimal', 'standard', 'detailed'].map((level) => (
+                      <TouchableOpacity
+                        key={level}
+                        style={[
+                          styles.insightLevelOption,
+                          (settings.scorecard?.insightDetailLevel || 'standard') === level && styles.insightLevelOptionSelected
+                        ]}
+                        onPress={() => {
+                          updateSettings({
+                            scorecard: { ...settings.scorecard, insightDetailLevel: level }
+                          });
+                        }}
+                      >
+                        <Text style={[
+                          styles.insightLevelText,
+                          (settings.scorecard?.insightDetailLevel || 'standard') === level && styles.insightLevelTextSelected
+                        ]}>
+                          {level.charAt(0).toUpperCase() + level.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLabelContainer}>
+                    <Text style={styles.settingLabel}>Remember by Course</Text>
+                    <Text style={styles.settingDescription}>Save settings for each course</Text>
+                  </View>
+                  <Switch
+                    value={settings.scorecard?.rememberCourseSettings !== false}
+                    onValueChange={(value) => {
+                      updateSettings({
+                        scorecard: { ...settings.scorecard, rememberCourseSettings: value }
+                      });
+                      // If enabled, save current settings for this course
+                      if (value && course?.id) {
+                        const courseSettings = {
+                          showHistoricalInsights: settings.scorecard?.showHistoricalInsights !== false,
+                          showHistoricalAverages: settings.scorecard?.showHistoricalAverages !== false,
+                          insightDetailLevel: settings.scorecard?.insightDetailLevel || 'standard',
+                          showAchievementNotifications: settings.scorecard?.showAchievementNotifications !== false,
+                          showSmartClubTracking: settings.scorecard?.showSmartClubTracking !== false,
+                        };
+                        AsyncStorage.setItem(`course_settings_${course.id}`, JSON.stringify(courseSettings));
+                      }
+                    }}
+                    trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+                    thumbColor={settings.scorecard?.rememberCourseSettings !== false ? '#2E7D32' : '#F5F5F5'}
+                  />
+                </View>
+              </View>
+            )}
+
             <View style={styles.settingRow}>
               <View style={styles.settingLabelContainer}>
                 <Text style={styles.settingLabel}>Achievement Notifications</Text>
@@ -1151,7 +1251,7 @@ const ScorecardScreen = ({ route, navigation }) => {
       )}
       
       {/* Statistics Card */}
-      {settings.scorecard?.showHistoricalInsights !== false && (currentHoleHistorical || currentHoleClubInsights || (courseProgress && playedHoles.length >= 3)) && (
+      {settings.scorecard?.showHistoricalInsights !== false && settings.scorecard?.showHistoricalAverages !== false && (currentHoleHistorical || currentHoleClubInsights || (courseProgress && playedHoles.length >= 3)) && (
         <View style={[
           styles.statisticsCard,
           !statisticsCardExpanded && styles.statisticsCardCollapsed
@@ -1178,7 +1278,7 @@ const ScorecardScreen = ({ route, navigation }) => {
           {statisticsCardExpanded && (
             <View style={styles.statisticsContent}>
           
-          {/* Hole Historical Data */}
+          {/* Hole Historical Data - Show in all detail levels */}
           {currentHoleHistorical && (
             <View style={styles.statisticsSection}>
               <Text style={styles.statisticsSectionTitle}>Your Performance</Text>
@@ -1220,8 +1320,8 @@ const ScorecardScreen = ({ route, navigation }) => {
             </View>
           )}
           
-          {/* Club Recommendations */}
-          {currentHoleClubInsights && currentHoleClubInsights.hasData && (
+          {/* Club Recommendations - Show in standard and detailed levels */}
+          {(settings.scorecard?.insightDetailLevel || 'standard') !== 'minimal' && currentHoleClubInsights && currentHoleClubInsights.hasData && (
             <View style={styles.statisticsSection}>
               <Text style={styles.statisticsSectionTitle}>Club Recommendations</Text>
               <View style={styles.clubRecommendations}>
@@ -1256,8 +1356,8 @@ const ScorecardScreen = ({ route, navigation }) => {
             </View>
           )}
           
-          {/* Course Progress */}
-          {courseProgress && playedHoles.length >= 3 && (
+          {/* Course Progress - Show in standard and detailed levels */}
+          {(settings.scorecard?.insightDetailLevel || 'standard') !== 'minimal' && courseProgress && playedHoles.length >= 3 && (
             <View style={styles.statisticsSection}>
               <Text style={styles.statisticsSectionTitle}>Course Progress</Text>
               <View style={styles.statisticsGrid}>
@@ -1304,8 +1404,8 @@ const ScorecardScreen = ({ route, navigation }) => {
             </View>
           )}
           
-          {/* Detailed Insights - Always Displayed */}
-          {expandedInsightsData && (
+          {/* Detailed Insights - Show only in detailed level */}
+          {(settings.scorecard?.insightDetailLevel || 'standard') === 'detailed' && expandedInsightsData && (
             <View style={styles.statisticsSection}>
               <Text style={styles.statisticsSectionTitle}>Detailed Insights</Text>
               <View style={styles.detailedInsights}>
@@ -2870,16 +2970,27 @@ const styles = StyleSheet.create({
     color: '#666666',
     textTransform: 'uppercase',
     marginHorizontal: 16,
-    marginBottom: 8,
-    marginTop: 8,
+    marginBottom: 6,
+    marginTop: 6,
   },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    minHeight: 60,
+    minHeight: 50,
+  },
+  settingRowCompact: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  settingSubsection: {
+    backgroundColor: '#f8f8f8',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    paddingVertical: 4,
   },
   settingLabelContainer: {
     flex: 1,
@@ -2894,6 +3005,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666666',
     marginTop: 2,
+  },
+  insightLevelSelector: {
+    flexDirection: 'row',
+    marginTop: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    padding: 2,
+  },
+  insightLevelOption: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginHorizontal: 1,
+  },
+  insightLevelOptionSelected: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  insightLevelText: {
+    fontSize: 13,
+    color: '#666666',
+    fontWeight: '500',
+  },
+  insightLevelTextSelected: {
+    color: '#2e7d32',
+    fontWeight: '600',
   },
   endRoundButton: {
     margin: 16,
