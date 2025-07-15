@@ -466,12 +466,29 @@ screens/rounds/
 ## 🎯 Implementation Progress
 
 ### **Phase 3.1.1: Map Infrastructure Setup**
-- [ ] **3.1.1.1**: Install and configure react-native-maps
-- [ ] **3.1.1.2**: Create dual-view navigation with Material Design tabs
+- [x] **3.1.1.1**: Install and configure react-native-maps
+  - ✅ @react-navigation/material-top-tabs installed
+  - ✅ react-native-maps already available
+  - ✅ react-native-permissions for location access
+- [x] **3.1.1.2**: Create dual-view navigation with Material Design tabs
+  - ✅ Created ScorecardContainer.js with Material Design tabs
+  - ✅ Refactored original ScorecardScreen (35k+ tokens → clean structure)
+  - ✅ Created SharedHeader.js for common navigation
+  - ✅ Created ScorecardView.js with extracted scorecard logic
+  - ✅ Created MapView.js with basic map functionality
 - [ ] **3.1.1.3**: Setup MapTiler integration
-- [ ] **3.1.1.4**: Basic map view component
+- [ ] **3.1.1.4**: Basic map view component enhancements
 
-**Current Status**: Ready to begin after git commit
+**Current Status**: Step 3.1.1.2 Complete - Fixed component issues, ready for testing
+
+### **Recent Fixes Applied**:
+- ✅ Fixed MapView import and component naming conflicts
+- ✅ Cleaned up unnecessary fallback logic (MapView imports correctly)
+- ✅ Added SafeAreaView to SharedHeader for proper layout  
+- ✅ Corrected tab navigation component references
+- ✅ Removed excessive console logging
+
+**Testing Status**: Ready for dual-view functionality testing
 
 ## 🎯 Next Immediate Steps
 
