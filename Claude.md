@@ -122,3 +122,60 @@ The plan contains 5 phases from Foundation Stabilization to Advanced Features. A
    - User will build and test on device
    - Wait for user feedback before proceeding
 3. **Testing**: Always wait for user confirmation that changes work on device before marking tasks complete
+
+## Map Implementation History and Reversion Guide
+
+### Pre-Maps State (Commit: a71ff88)
+**To revert to before any map changes**:
+1. The app had Score/Statistics tabs only
+2. ScorecardScreen.js was a single 35k+ token file with all functionality
+3. No map dependencies or components existed
+
+### Google Maps Implementation (Branch: backup-google-maps)
+**Current implementation before MapLibre migration**:
+- **Dependencies**: react-native-maps with PROVIDER_GOOGLE
+- **Files Modified**:
+  - `/mobile/src/screens/rounds/ScorecardScreen.js` - Refactored into tab container
+  - `/mobile/src/screens/rounds/components/MapView.js` - Google Maps implementation
+  - `/mobile/src/screens/rounds/components/ScorecardContainer.js` - Shared state management
+  - `/mobile/src/screens/rounds/components/ScorecardView.js` - Scorecard functionality
+  - `/mobile/android/app/src/main/AndroidManifest.xml` - Google Maps metadata
+  - `/mobile/android/app/src/main/res/values/strings.xml` - Google Maps API key
+  - `/mobile/src/config/mapConfig.js` - MapTiler configuration
+  - `/mobile/src/services/mapTilerService.js` - MapTiler API service
+- **Features**:
+  - MapTiler satellite imagery via UrlTile
+  - Hole navigation with par/yardage display
+  - Distance information bar (placeholder)
+  - User location tracking
+  - Test marker at Augusta National
+
+### MapLibre Migration (Current Work)
+**Migration plan documented in**: `/GoogleToMaplibre.md`
+**Backup of Google Maps MapView**: `/mobile/src/screens/rounds/components/MapView.google.backup.js`
+
+### To Revert to Any State:
+
+1. **To pre-maps state (no maps at all)**:
+   ```bash
+   git checkout a71ff88
+   npm install
+   cd ios && pod install
+   ```
+
+2. **To Google Maps implementation**:
+   ```bash
+   git checkout backup-google-maps
+   npm install
+   cd ios && pod install
+   ```
+
+3. **Key files to restore for Google Maps**:
+   - Restore Google Maps API key in strings.xml
+   - Ensure AndroidManifest.xml has Google Maps metadata
+   - Use MapView.google.backup.js as reference
+
+### Important Notes:
+- Google Maps requires API key to display map (shows black screen without it)
+- MapTiler API key: 9VwMyrJdecjrEB6fwLGJ
+- Current course: Augusta National (33.5031, -82.0206)

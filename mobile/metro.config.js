@@ -21,33 +21,18 @@ const config = {
       },
     }),
   },
-  // Add detailed logging with error tracking
+  // Add detailed logging
   reporter: {
     update: (event) => {
-      // Log all events with timestamps
-      const timestamp = new Date().toISOString();
-      console.log(`[${timestamp}] 📦 Metro event: ${event.type}`);
-      
+      console.log('Metro event:', event.type);
       if (event.type === 'transform_cache_reset') {
-        console.log('🔄 Metro cache reset');
+        console.log('Metro cache reset');
       }
       if (event.type === 'bundle_build_done') {
-        console.log('✅ Bundle build complete');
+        console.log('Bundle build complete');
       }
       if (event.type === 'bundle_transform_progressed') {
-        console.log(`🔄 Transform progress: ${event.transformedFileCount}/${event.totalFileCount}`);
-      }
-      if (event.type === 'bundle_build_failed') {
-        console.error('❌ Bundle build failed:', event.error);
-      }
-      if (event.type === 'transform_cache_reset') {
-        console.log('🔄 Transform cache reset');
-      }
-      if (event.type === 'dep_graph_loaded') {
-        console.log('📊 Dependency graph loaded');
-      }
-      if (event.type === 'bundle_transform_progressed_throttled') {
-        console.log(`⏱️  Transform throttled: ${event.transformedFileCount}/${event.totalFileCount}`);
+        console.log(`Transform progress: ${event.transformedFileCount}/${event.totalFileCount}`);
       }
     },
   },

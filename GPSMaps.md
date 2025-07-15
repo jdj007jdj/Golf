@@ -59,12 +59,12 @@ After evaluating options, **MapTiler** is recommended for the following reasons:
 #### Step 3.1.1: Map Infrastructure Setup (4-6 hours)
 **Goal**: Establish map rendering and navigation structure
 
-- [ ] **3.1.1.1**: Install and configure react-native-maps
+- [x] **3.1.1.1**: Install and configure react-native-maps
   - iOS: Configure Apple Maps
   - Android: Configure Google Maps renderer
   - Test: Basic map renders on both platforms
 
-- [ ] **3.1.1.2**: Create dual-view navigation
+- [x] **3.1.1.2**: Create dual-view navigation
   - Add tab bar to ScorecardScreen: [Scorecard | Map]
   - Implement smooth view transitions
   - Maintain state between view switches

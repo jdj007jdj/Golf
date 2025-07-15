@@ -8,155 +8,31 @@ import {
   AppState,
   ActivityIndicator,
 } from 'react-native';
-
-console.log('🔍 ScorecardContainer: Starting imports...');
-
-// Import dependencies with error handling
-let createMaterialTopTabNavigator;
-try {
-  createMaterialTopTabNavigator = require('@react-navigation/material-top-tabs').createMaterialTopTabNavigator;
-  console.log('✅ ScorecardContainer: Successfully imported material-top-tabs');
-} catch (error) {
-  console.error('❌ ScorecardContainer: Failed to import material-top-tabs:', error);
-}
-
-let AsyncStorage;
-try {
-  AsyncStorage = require('@react-native-async-storage/async-storage').default;
-  console.log('✅ ScorecardContainer: Successfully imported AsyncStorage');
-} catch (error) {
-  console.error('❌ ScorecardContainer: Failed to import AsyncStorage:', error);
-}
-
-let useAuth, useSettings;
-try {
-  useAuth = require('../../../contexts/AuthContext').useAuth;
-  useSettings = require('../../../contexts/SettingsContext').useSettings;
-  console.log('✅ ScorecardContainer: Successfully imported contexts');
-} catch (error) {
-  console.error('❌ ScorecardContainer: Failed to import contexts:', error);
-}
-
-let API_CONFIG;
-try {
-  API_CONFIG = require('../../../config/api').API_CONFIG;
-  console.log('✅ ScorecardContainer: Successfully imported API_CONFIG');
-} catch (error) {
-  console.error('❌ ScorecardContainer: Failed to import API_CONFIG:', error);
-}
-
-let coursePerformanceUtils;
-try {
-  coursePerformanceUtils = require('../../../utils/coursePerformanceUtils');
-  console.log('✅ ScorecardContainer: Successfully imported coursePerformanceUtils');
-} catch (error) {
-  console.error('❌ ScorecardContainer: Failed to import coursePerformanceUtils:', error);
-}
-
-let AchievementPopup;
-try {
-  AchievementPopup = require('../../../components/AchievementPopup').default;
-  console.log('✅ ScorecardContainer: Successfully imported AchievementPopup');
-} catch (error) {
-  console.error('❌ ScorecardContainer: Failed to import AchievementPopup:', error);
-}
-
-let ScorecardView;
-try {
-  ScorecardView = require('./ScorecardView').default;
-  console.log('✅ ScorecardContainer: Successfully imported ScorecardView');
-} catch (error) {
-  console.error('❌ ScorecardContainer: Failed to import ScorecardView:', error);
-}
-
-let CourseMapView;
-try {
-  CourseMapView = require('./MapView').default;
-  console.log('✅ ScorecardContainer: Successfully imported CourseMapView');
-} catch (error) {
-  console.error('❌ ScorecardContainer: Failed to import CourseMapView:', error);
-}
-
-let SharedHeader;
-try {
-  SharedHeader = require('./SharedHeader').default;
-  console.log('✅ ScorecardContainer: Successfully imported SharedHeader');
-} catch (error) {
-  console.error('❌ ScorecardContainer: Failed to import SharedHeader:', error);
-}
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useSettings } from '../../../contexts/SettingsContext';
+import { API_CONFIG } from '../../../config/api';
+import { 
+  calculateHolePerformance, 
+  filterRoundsByCourse, 
+  analyzeClubUsage, 
+  getClubInsightsForScorecard, 
+  detectAchievements, 
+  getCourseStats 
+} from '../../../utils/coursePerformanceUtils';
+import AchievementPopup from '../../../components/AchievementPopup';
+import ScorecardView from './ScorecardView';
+import CourseMapView from './MapViewMapLibre';
+import SharedHeader from './SharedHeader';
 
 const { width } = Dimensions.get('window');
-let Tab;
+const Tab = createMaterialTopTabNavigator();
 
 const ScorecardContainer = ({ route, navigation }) => {
-  console.log('🔍 ScorecardContainer: Starting component render...');
-  
-  // Check if all required imports are available
-  const missingImports = [];
-  if (!createMaterialTopTabNavigator) missingImports.push('material-top-tabs');
-  if (!AsyncStorage) missingImports.push('AsyncStorage');
-  if (!useAuth) missingImports.push('useAuth');
-  if (!useSettings) missingImports.push('useSettings');
-  if (!ScorecardView) missingImports.push('ScorecardView');
-  if (!CourseMapView) missingImports.push('CourseMapView');
-  if (!SharedHeader) missingImports.push('SharedHeader');
-  
-  if (missingImports.length > 0) {
-    console.error('❌ ScorecardContainer: Missing imports:', missingImports);
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Component Import Errors</Text>
-        <Text style={styles.errorDetails}>
-          Missing: {missingImports.join(', ')}
-        </Text>
-      </View>
-    );
-  }
-  
-  // Initialize Tab navigator
-  try {
-    Tab = createMaterialTopTabNavigator();
-    console.log('✅ ScorecardContainer: Tab navigator initialized');
-  } catch (error) {
-    console.error('❌ ScorecardContainer: Failed to initialize Tab navigator:', error);
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Tab Navigator Error</Text>
-        <Text style={styles.errorDetails}>{error.toString()}</Text>
-      </View>
-    );
-  }
-  
-  // Get route params
-  let round, course;
-  try {
-    ({ round, course } = route.params);
-    console.log('✅ ScorecardContainer: Route params extracted:', { round: !!round, course: !!course });
-  } catch (error) {
-    console.error('❌ ScorecardContainer: Failed to extract route params:', error);
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Route Parameters Error</Text>
-        <Text style={styles.errorDetails}>{error.toString()}</Text>
-      </View>
-    );
-  }
-  
-  // Initialize contexts
-  let token, settings, updateSettings;
-  try {
-    ({ token } = useAuth());
-    ({ settings, updateSettings } = useSettings());
-    console.log('✅ ScorecardContainer: Contexts initialized');
-  } catch (error) {
-    console.error('❌ ScorecardContainer: Failed to initialize contexts:', error);
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Context Initialization Error</Text>
-        <Text style={styles.errorDetails}>{error.toString()}</Text>
-      </View>
-    );
-  }
+  const { round, course } = route.params;
+  const { token } = useAuth();
+  const { settings, updateSettings } = useSettings();
   
   // All shared state that both Scorecard and Map need
   const [scores, setScores] = useState({});
@@ -269,95 +145,25 @@ const ScorecardContainer = ({ route, navigation }) => {
   // Load historical data for insights
   const loadHistoricalData = async () => {
     try {
-      console.log('🔍 ScorecardContainer: Loading historical data...');
-      console.log('🔍 ScorecardContainer: Course ID:', course.id);
-      console.log('🔍 ScorecardContainer: Course object:', course);
-      
       const roundsData = await AsyncStorage.getItem('golf_round_history');
       if (roundsData) {
         const rounds = JSON.parse(roundsData);
-        console.log('✅ ScorecardContainer: Found', rounds.length, 'rounds in history');
-        console.log('🔍 ScorecardContainer: Sample round:', rounds[0]);
-        
-        // Use the imported coursePerformanceUtils object
-        const courseRounds = coursePerformanceUtils.filterRoundsByCourse(rounds, course.id);
-        console.log('✅ ScorecardContainer: Found', courseRounds.length, 'rounds for this course');
-        console.log('🔍 ScorecardContainer: Course rounds:', courseRounds);
+        const courseRounds = filterRoundsByCourse(rounds, course.id);
         
         if (courseRounds.length > 0) {
-          // Get comprehensive hole analysis for the entire course
-          const holeAnalysis = coursePerformanceUtils.calculateHolePerformance(courseRounds, course);
-          const clubAnalysis = coursePerformanceUtils.analyzeClubUsage(courseRounds);
-          
-          console.log('🔍 ScorecardContainer: Hole analysis:', holeAnalysis);
-          console.log('🔍 ScorecardContainer: Club analysis:', clubAnalysis);
-          
-          setHistoricalData({
-            ...holeAnalysis,
-            rounds: courseRounds,
-            totalRounds: courseRounds.length
+          const holeAnalysis = {};
+          holes.forEach(hole => {
+            holeAnalysis[hole.holeNumber] = calculateHolePerformance(courseRounds, hole.holeNumber);
           });
+          
+          const clubAnalysis = analyzeClubUsage(courseRounds);
+          
+          setHistoricalData(holeAnalysis);
           setClubData(clubAnalysis);
-          console.log('✅ ScorecardContainer: Historical data loaded successfully');
-        } else {
-          console.log('⚠️ ScorecardContainer: No rounds found for this course');
-          console.log('🔍 ScorecardContainer: Available course IDs in rounds:', rounds.map(r => r.courseId || r.course_id || r.course?.id).filter(Boolean));
         }
-      } else {
-        console.log('ℹ️  ScorecardContainer: No historical data found in AsyncStorage');
-        console.log('🔍 ScorecardContainer: Attempting to fetch from backend...');
-        await fetchHistoricalDataFromBackend();
       }
     } catch (error) {
-      console.error('❌ ScorecardContainer: Error loading historical data:', error);
-    }
-  };
-
-  // Fetch historical data from backend
-  const fetchHistoricalDataFromBackend = async () => {
-    try {
-      console.log('🔍 ScorecardContainer: Fetching rounds from backend...');
-      const response = await fetch(`${API_CONFIG.BASE_URL}/api/rounds`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data && data.data.length > 0) {
-          console.log('✅ ScorecardContainer: Fetched', data.data.length, 'rounds from backend');
-          
-          // Save to AsyncStorage for future use
-          await AsyncStorage.setItem('golf_round_history', JSON.stringify(data.data));
-          
-          // Process the data
-          const courseRounds = coursePerformanceUtils.filterRoundsByCourse(data.data, course.id);
-          console.log('✅ ScorecardContainer: Found', courseRounds.length, 'rounds for this course from backend');
-          
-          if (courseRounds.length > 0) {
-            // Get comprehensive hole analysis for the entire course
-            const holeAnalysis = coursePerformanceUtils.calculateHolePerformance(courseRounds, course);
-            const clubAnalysis = coursePerformanceUtils.analyzeClubUsage(courseRounds);
-            
-            setHistoricalData({
-              ...holeAnalysis,
-              rounds: courseRounds,
-              totalRounds: courseRounds.length
-            });
-            setClubData(clubAnalysis);
-            console.log('✅ ScorecardContainer: Historical data loaded from backend successfully');
-          }
-        } else {
-          console.log('ℹ️  ScorecardContainer: No rounds found in backend response');
-        }
-      } else {
-        console.error('❌ ScorecardContainer: Failed to fetch rounds from backend:', response.status);
-      }
-    } catch (error) {
-      console.error('❌ ScorecardContainer: Error fetching from backend:', error);
+      console.error('Error loading historical data:', error);
     }
   };
 
@@ -443,7 +249,7 @@ const ScorecardContainer = ({ route, navigation }) => {
         }}
       >
         <Tab.Screen 
-          name="Score" 
+          name="Scorecard" 
           children={() => <ScorecardView {...sharedProps} />}
         />
         <Tab.Screen 
@@ -451,6 +257,13 @@ const ScorecardContainer = ({ route, navigation }) => {
           children={() => <CourseMapView {...sharedProps} />}
         />
       </Tab.Navigator>
+      
+      {/* Achievement Popup */}
+      <AchievementPopup
+        visible={showAchievements}
+        achievements={currentAchievements}
+        onClose={() => setShowAchievements(false)}
+      />
     </View>
   );
 };
@@ -470,26 +283,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: '#666',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#d32f2f',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  errorDetails: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
   },
 });
 
