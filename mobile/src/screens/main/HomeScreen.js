@@ -92,6 +92,13 @@ const HomeScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
         
+        <TouchableOpacity 
+          style={[styles.testButton]}
+          onPress={() => navigation.navigate('TestMap')}
+        >
+          <Text style={styles.testButtonText}>🧪 Test MapTiler</Text>
+        </TouchableOpacity>
+        
         <View style={styles.quickActions}>
           <TouchableOpacity 
             style={styles.actionCard}
@@ -275,6 +282,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 8,
+  },
+  testButton: {
+    backgroundColor: '#ff9800',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  testButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

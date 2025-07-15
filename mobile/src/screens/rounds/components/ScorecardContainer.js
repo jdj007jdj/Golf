@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -185,8 +185,8 @@ const ScorecardContainer = ({ route, navigation }) => {
     setShowSettings(true);
   };
 
-  // Shared props for both tabs
-  const sharedProps = {
+  // Shared props for both tabs - memoized to prevent unnecessary re-renders
+  const sharedProps = useMemo(() => ({
     round,
     course,
     holes,
@@ -219,7 +219,29 @@ const ScorecardContainer = ({ route, navigation }) => {
     token,
     settings,
     updateSettings,
-  };
+  }), [
+    round,
+    course,
+    holes,
+    scores,
+    putts,
+    clubs,
+    currentHole,
+    isLoading,
+    showSettings,
+    isSavingRound,
+    historicalData,
+    clubData,
+    showAchievements,
+    currentAchievements,
+    courseStats,
+    showClubModal,
+    expandedCategories,
+    navigation,
+    token,
+    settings
+  ]);
+
 
   // Show loading indicator while loading scores
   if (isLoading) {
@@ -249,11 +271,11 @@ const ScorecardContainer = ({ route, navigation }) => {
         }}
       >
         <Tab.Screen 
-          name="Scorecard" 
+          name="Score"
           children={() => <ScorecardView {...sharedProps} />}
         />
         <Tab.Screen 
-          name="Map" 
+          name="Map"
           children={() => <CourseMapView {...sharedProps} />}
         />
       </Tab.Navigator>

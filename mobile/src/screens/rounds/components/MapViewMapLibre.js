@@ -20,7 +20,7 @@ MapLibreGL.setAccessToken(null);
 
 const { width, height } = Dimensions.get('window');
 
-const CourseMapView = ({ 
+const CourseMapView = React.memo(({ 
   round, 
   course, 
   holes, 
@@ -46,9 +46,11 @@ const CourseMapView = ({
 
   const currentHoleData = holes.find(hole => hole.holeNumber === currentHole) || holes[0];
 
-  // MapTiler satellite style URL
-  const MAPTILER_KEY = MAP_CONFIG.MAPTILER.API_KEY || '9VwMyrJdecjrEB6fwLGJ';
-  const mapStyle = `https://api.maptiler.com/maps/satellite/style.json?key=${MAPTILER_KEY}`;
+  // MapTiler satellite style URL - use the pre-built style
+  const MAPTILER_KEY = '9VwMyrJdecjrEB6fwLGJ';
+  const mapStyleURL = `https://api.maptiler.com/maps/satellite/style.json?key=${MAPTILER_KEY}`;
+  
+  console.log('🗺️ MapViewMapLibre: Using MapTiler style URL:', mapStyleURL);
 
   // Default center coordinates
   const centerCoordinate = course && course.latitude && course.longitude
@@ -57,67 +59,45 @@ const CourseMapView = ({
 
   // Initialize MapTiler service and request permissions
   useEffect(() => {
-    initializeMapTiler();
-    requestLocationPermission();
-  }, []);
-
-  const requestLocationPermission = async () => {
-    try {
-      const permission = Platform.OS === 'ios' 
-        ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE 
-        : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION;
-
-      const result = await request(permission);
-      
-      if (result === RESULTS.GRANTED) {
-        setHasLocationPermission(true);
-        console.log('✅ Location permission granted');
-      } else {
-        setHasLocationPermission(false);
-        console.log('❌ Location permission denied');
-      }
-    } catch (error) {
-      console.error('Location permission error:', error);
-      setHasLocationPermission(false);
-    }
-  };
-
-  const initializeMapTiler = async () => {
-    try {
-      setLoading(true);
-      
-      // Try to load existing API key from storage first
-      let apiKey = await mapTilerService.loadApiKey();
-      
-      // If no stored key, use the one from config
-      if (!apiKey && MAP_CONFIG.MAPTILER.API_KEY) {
-        await mapTilerService.initialize(MAP_CONFIG.MAPTILER.API_KEY);
-        apiKey = MAP_CONFIG.MAPTILER.API_KEY;
-      }
-      
-      if (apiKey) {
-        setMapTilerReady(true);
-        console.log('✅ MapTiler API key found, enabling satellite imagery');
+    const init = async () => {
+      try {
+        setLoading(true);
         
-        // Test API key in background
-        mapTilerService.testApiKey().then(testResult => {
-          if (!testResult.valid) {
-            console.warn('MapTiler API key is invalid:', testResult.error);
-            setMapTilerReady(false);
-          }
-        }).catch(error => {
-          console.error('Error testing MapTiler API key:', error);
-        });
-      } else {
-        console.log('No MapTiler API key found. Satellite imagery will not be available.');
-        setShowKeyInput(true);
+        // Initialize MapTiler
+        const apiKey = MAP_CONFIG.MAPTILER.API_KEY;
+        if (apiKey) {
+          setMapTilerReady(true);
+          console.log('✅ MapTiler API key found, enabling satellite imagery');
+        } else {
+          console.log('No MapTiler API key found. Satellite imagery will not be available.');
+          setShowKeyInput(true);
+        }
+        
+        // Request location permission
+        const permission = Platform.OS === 'ios' 
+          ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE 
+          : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION;
+
+        const result = await request(permission);
+        
+        if (result === RESULTS.GRANTED) {
+          setHasLocationPermission(true);
+          console.log('✅ Location permission granted');
+        } else {
+          setHasLocationPermission(false);
+          console.log('❌ Location permission denied');
+        }
+      } catch (error) {
+        console.error('Initialization error:', error);
+        setHasLocationPermission(false);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error initializing MapTiler:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    init();
+  }, []); // Empty dependency array - only run once
+
 
   const onMapReady = () => {
     console.log('🗺️ MapViewMapLibre: Map is ready!');
@@ -151,7 +131,6 @@ const CourseMapView = ({
 
   console.log('🗺️ MapViewMapLibre: Rendering map with center:', centerCoordinate);
   console.log('🗺️ MapViewMapLibre: MapTiler ready:', mapTilerReady);
-  console.log('🗺️ MapViewMapLibre: Style URL:', mapStyle);
 
   return (
     <View style={styles.container}>
@@ -159,7 +138,7 @@ const CourseMapView = ({
       <MapLibreGL.MapView
         ref={mapRef}
         style={styles.map}
-        styleURL={mapStyle}
+        styleURL={mapStyleURL}
         onDidFinishLoadingMap={onMapReady}
         logoEnabled={false}
         attributionEnabled={true}
@@ -168,7 +147,9 @@ const CourseMapView = ({
         <MapLibreGL.Camera
           ref={cameraRef}
           centerCoordinate={centerCoordinate}
-          zoomLevel={16}
+          zoomLevel={MAP_CONFIG.defaultZoom}
+          minZoomLevel={MAP_CONFIG.minZoom}
+          maxZoomLevel={MAP_CONFIG.maxZoom}
         />
 
         {/* User Location - only show if permission granted */}
@@ -244,6 +225,11 @@ const CourseMapView = ({
         </View>
       </View>
 
+      {/* MapTiler Attribution */}
+      <View style={styles.attribution}>
+        <Text style={styles.attributionText}>© MapTiler © OpenStreetMap</Text>
+      </View>
+
       {/* MapTiler Key Input Modal */}
       <MapTilerKeyInput
         visible={showKeyInput}
@@ -255,7 +241,7 @@ const CourseMapView = ({
       />
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -362,6 +348,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: '#999',
+  },
+  attribution: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  attributionText: {
+    fontSize: 10,
+    color: '#666',
   },
 });
 
