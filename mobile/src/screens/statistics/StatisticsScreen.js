@@ -312,7 +312,7 @@ const StatisticsScreen = ({ navigation }) => {
                 <Text style={styles.sectionTitle}>Performance Trends</Text>
                 <View style={styles.trendCard}>
                   <Text style={styles.trendLabel}>
-                    Current Trend: {performanceTrends.trend}
+                    Current Trend: {performanceTrends.trend || 'Unknown'}
                   </Text>
                   {performanceTrends.improvement !== 0 && (
                     <Text style={[
@@ -323,7 +323,7 @@ const StatisticsScreen = ({ navigation }) => {
                     </Text>
                   )}
                   <Text style={styles.trendDescription}>
-                    {performanceTrends.description}
+                    {performanceTrends.description || 'No trend data available'}
                   </Text>
                   <View style={styles.confidenceContainer}>
                     <Text style={styles.confidenceLabel}>Confidence: </Text>
@@ -372,13 +372,13 @@ const StatisticsScreen = ({ navigation }) => {
                   <View style={styles.courseStatRow}>
                     <Text style={styles.courseStatLabel}>Best Holes:</Text>
                     <Text style={styles.courseStatValue}>
-                      {(statistics.courseStats.strongestHoles || []).map(h => `#${h.holeNumber}`).join(', ')}
+                      {(statistics.courseStats.strongestHoles || []).map(h => `#${h.holeNumber}`).join(', ') || 'None'}
                     </Text>
                   </View>
                   <View style={styles.courseStatRow}>
                     <Text style={styles.courseStatLabel}>Worst Holes:</Text>
                     <Text style={styles.courseStatValue}>
-                      {(statistics.courseStats.weakestHoles || []).map(h => `#${h.holeNumber}`).join(', ')}
+                      {(statistics.courseStats.weakestHoles || []).map(h => `#${h.holeNumber}`).join(', ') || 'None'}
                     </Text>
                   </View>
                 </View>
