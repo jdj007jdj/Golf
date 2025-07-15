@@ -1,4 +1,4 @@
-(NOBRIDGE) ERROR Warning: TypeError: Cannot read property 'toUpperCase' of undefined
+(NOBRIDGE) ERROR Warning: TypeError: Cannot read property 'toFixed' of undefined
 
 This error is located at:
 in StatisticsScreen (created by SceneView)
@@ -47,4 +47,3 @@ in RCTView (created by View)
 in View (created by AppContainer)
 in AppContainer
 in MinimalApp(RootComponent)
-(NOBRIDGE) ERROR Warning: TypeError: Cannot read property 'toUpperCase' of undefined

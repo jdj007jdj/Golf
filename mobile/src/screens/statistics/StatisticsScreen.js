@@ -170,7 +170,7 @@ const StatisticsScreen = ({ navigation }) => {
       return sum + roundTotal;
     }, 0);
     
-    const averageScore = totalScore / filteredRounds.length;
+    const averageScore = filteredRounds.length > 0 ? totalScore / filteredRounds.length : 0;
     
     // Calculate course-specific stats if a course is selected
     let courseStats = null;
@@ -188,11 +188,13 @@ const StatisticsScreen = ({ navigation }) => {
       ? analyzeClubPerformanceCorrelation(filteredRounds, selectedCourse)
       : null;
     
+    const roundScores = filteredRounds.map(r => Object.values(r.holes || {}).reduce((sum, s) => sum + (s || 0), 0));
+    
     setStatistics({
       totalRounds: filteredRounds.length,
       averageScore,
-      bestRound: Math.min(...filteredRounds.map(r => Object.values(r.holes || {}).reduce((sum, s) => sum + (s || 0), 0))),
-      worstRound: Math.max(...filteredRounds.map(r => Object.values(r.holes || {}).reduce((sum, s) => sum + (s || 0), 0))),
+      bestRound: roundScores.length > 0 ? Math.min(...roundScores) : 0,
+      worstRound: roundScores.length > 0 ? Math.max(...roundScores) : 0,
       courseStats,
     });
     
@@ -242,7 +244,7 @@ const StatisticsScreen = ({ navigation }) => {
         {trend && (
           <View style={styles.trendContainer}>
             <Text style={[styles.trendText, { color: trend > 0 ? '#d32f2f' : '#2e7d32' }]}>
-              {trend > 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}
+              {trend > 0 ? '▲' : '▼'} {Math.abs(trend || 0).toFixed(1)}
             </Text>
           </View>
         )}
@@ -287,7 +289,7 @@ const StatisticsScreen = ({ navigation }) => {
                 )}
                 {renderStatisticsCard(
                   'Average Score',
-                  statistics.averageScore.toFixed(1),
+                  statistics.averageScore ? statistics.averageScore.toFixed(1) : '0',
                   null,
                   performanceTrends?.improvement
                 )}
@@ -317,7 +319,7 @@ const StatisticsScreen = ({ navigation }) => {
                       styles.trendValue,
                       { color: performanceTrends.improvement > 0 ? '#d32f2f' : '#2e7d32' }
                     ]}>
-                      {performanceTrends.improvement > 0 ? '+' : ''}{performanceTrends.improvement.toFixed(1)} strokes
+                      {performanceTrends.improvement > 0 ? '+' : ''}{(performanceTrends.improvement || 0).toFixed(1)} strokes
                     </Text>
                   )}
                   <Text style={styles.trendDescription}>
@@ -348,7 +350,7 @@ const StatisticsScreen = ({ navigation }) => {
                     .map(([club, stats]) => (
                       <View key={club} style={styles.clubCard}>
                         <Text style={styles.clubName}>{(club || '').toUpperCase()}</Text>
-                        <Text style={styles.clubStat}>Avg: {stats.averageScore.toFixed(1)}</Text>
+                        <Text style={styles.clubStat}>Avg: {stats.averageScore ? stats.averageScore.toFixed(1) : '0'}</Text>
                         <Text style={styles.clubUses}>{stats.totalUses} uses</Text>
                       </View>
                     ))}
@@ -364,7 +366,7 @@ const StatisticsScreen = ({ navigation }) => {
                   <View style={styles.courseStatRow}>
                     <Text style={styles.courseStatLabel}>Course Average:</Text>
                     <Text style={styles.courseStatValue}>
-                      {statistics.courseStats.averageScore.toFixed(1)}
+                      {statistics.courseStats.averageScore ? statistics.courseStats.averageScore.toFixed(1) : '0'}
                     </Text>
                   </View>
                   <View style={styles.courseStatRow}>
