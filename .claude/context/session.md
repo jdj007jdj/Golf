@@ -85,4 +85,11 @@ Setting up full-stack Golf application with React frontend, React Native mobile,
   - Smart hole detection
   - Shot tracking integration
 - **Timeline**: 4-5 weeks for complete implementation
-- **Next Steps**: Begin Phase 3.1.1 - Map Infrastructure Setup
+
+## Phase 3.1.1 Implementation Decisions (2025-01-15)
+- **Navigation**: Material Design tabs (@react-navigation/material-top-tabs)
+- **Refactoring**: Major refactor of ScorecardScreen (35k+ tokens → multiple components)
+- **Map Provider**: MapTiler (100k tiles/month free tier)
+- **Approach**: Step-by-step with continuous testing and documentation updates
+- **Current Status**: Ready to begin after git commit "Working Before GPSMaps"
+- **Next Steps**: Install dependencies, refactor ScorecardScreen, add basic map integration

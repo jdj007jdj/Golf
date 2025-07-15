@@ -223,8 +223,8 @@
   - ✅ Step 2.2.4: Statistics screen with comprehensive dashboard
 
 ### Next Phase
-- **Phase 2.3**: Course Management
-  - Step 2.3.1: Add new course functionality
-  - Step 2.3.2: Edit course information
-  - Step 2.3.3: Course validation
-  - Step 2.3.4: Course sharing
+- **Phase 3**: GPS & Location Features
+  - **Decision**: Skip Phase 2.3 (Course Management) as future feature
+  - **Focus**: GPS rangefinder and satellite maps for premium golf experience
+  - **Implementation**: Major refactor of ScorecardScreen + MapTiler integration
+  - **Timeline**: 4-5 weeks for complete GPS/Maps implementation

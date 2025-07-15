@@ -437,12 +437,48 @@ function calculateDistance(lat1, lon1, lat2, lon2, unit = 'yards') {
 
 ---
 
-## 🎯 Immediate Next Steps
+## 🎯 Implementation Decisions (2025-01-15)
 
-1. Install react-native-maps and verify configuration
-2. Create MapTiler account and test API
-3. Implement basic map view in scorecard
-4. Add tab navigation for view switching
-5. Begin GPS permission implementation
+### **Final Architecture Decisions**
+1. **Navigation**: Material Design - `@react-navigation/material-top-tabs`
+2. **Refactoring**: Option A - Split massive ScorecardScreen into multiple components
+3. **Map Provider**: MapTiler - 100k tiles/month free tier with excellent satellite imagery
+4. **Implementation**: Step-by-step approach with continuous testing
+
+### **Current ScorecardScreen Analysis**
+- **File Size**: 35,000+ tokens - requires refactoring
+- **Dependencies**: `react-native-maps` already installed ✅
+- **Navigation**: Currently uses stack navigation only
+- **State Management**: Extensive state for scores, clubs, holes, statistics
+- **No existing map code**: Clean slate for integration
+
+### **Refactoring Strategy**
+```
+screens/rounds/
+├── ScorecardScreen.js (becomes tab container)
+├── components/
+│   ├── ScorecardView.js (extracted current scorecard UI)
+│   ├── MapView.js (new map component)
+│   ├── SharedHeader.js (header with back/settings)
+│   └── TabContainer.js (manages shared state)
+```
+
+## 🎯 Implementation Progress
+
+### **Phase 3.1.1: Map Infrastructure Setup**
+- [ ] **3.1.1.1**: Install and configure react-native-maps
+- [ ] **3.1.1.2**: Create dual-view navigation with Material Design tabs
+- [ ] **3.1.1.3**: Setup MapTiler integration
+- [ ] **3.1.1.4**: Basic map view component
+
+**Current Status**: Ready to begin after git commit
+
+## 🎯 Next Immediate Steps
+
+1. **Git Commit**: Save current working state with "Working Before GPSMaps"
+2. **Install Dependencies**: `@react-navigation/material-top-tabs`
+3. **Refactor ScorecardScreen**: Extract components for better maintainability
+4. **Create MapTiler Account**: Setup API key and test satellite tiles
+5. **Basic Map Integration**: Add tab navigation and basic map view
 
 Remember: This is a premium feature that will differentiate the app. Take time to get the UX perfect - golfers will use this dozens of times per round.
