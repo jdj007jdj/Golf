@@ -321,31 +321,17 @@ Instead of building everything at once, we'll create a **working app** that gets
 
 **Deliverable**: Comprehensive golf performance analytics
 
-#### **Step 2.3: Course Management** ⏱️ 4-6 hours
+#### **Step 2.3: Course Management** ⏱️ 4-6 hours ⚠️ FUTURE FEATURE
 **Goal**: Users can add and edit course information
-**Testing**: Course data management works completely
+**Status**: DEFERRED - Marked as future enhancement to prioritize GPS/Maps functionality
+**Reason**: GPS and live course mapping provides more immediate value to users
 
-- [ ] **2.3.1**: Add new course functionality
-  - Course creation form
-  - Basic course details (name, par, holes)
-  - Test: Users can add courses not in database
-  
-- [ ] **2.3.2**: Edit course information
-  - Modify hole details (par, yardage)
-  - Update course description
-  - Test: Course information can be corrected
-  
-- [ ] **2.3.3**: Course validation
-  - Reasonable par/yardage limits
-  - Required field validation
-  - Test: Course data is sensible and complete
-  
-- [ ] **2.3.4**: Course sharing
-  - Submit course updates to server
-  - Community course database
-  - Test: Course improvements benefit all users
+- [ ] **2.3.1**: Add new course functionality (FUTURE)
+- [ ] **2.3.2**: Edit course information (FUTURE)
+- [ ] **2.3.3**: Course validation (FUTURE)
+- [ ] **2.3.4**: Course sharing (FUTURE)
 
-**Deliverable**: Community-driven course database with user contributions
+**Note**: This feature will be revisited after Phase 3 GPS implementation is complete.
 
 ---
 

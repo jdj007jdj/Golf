@@ -74,3 +74,15 @@ Setting up full-stack Golf application with React frontend, React Native mobile,
   * Enhanced UI with professional card-based design and visual indicators
 - **User Experience**: Golfers now have access to intelligent, data-driven insights directly in their scorecard
 - **Next Phase Ready**: Foundation and scorecard integration complete, ready for achievement notifications (Step 2.2.2)
+
+## Phase 3 Planning - GPS & Maps (2025-01-15)
+- **Decision**: Skip Phase 2.3 (Course Management) as future feature
+- **Created**: Comprehensive GPSMaps.md implementation plan
+- **Key Features Planned**:
+  - Dual view system (Scorecard/Map toggle)
+  - Offline satellite imagery with MapTiler
+  - GPS rangefinder with real-time distances
+  - Smart hole detection
+  - Shot tracking integration
+- **Timeline**: 4-5 weeks for complete implementation
+- **Next Steps**: Begin Phase 3.1.1 - Map Infrastructure Setup
