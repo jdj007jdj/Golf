@@ -64,19 +64,63 @@ const StatisticsScreen = ({ navigation }) => {
       
       if (roundsResponse.ok) {
         const roundsData = await roundsResponse.json();
-        setRounds(roundsData.rounds || []);
+        console.log('API Response:', roundsData); // Debug log
+        
+        // Handle the API response format (success/data structure)
+        let roundsList = [];
+        if (roundsData.success && roundsData.data) {
+          roundsList = roundsData.data;
+        } else if (roundsData.rounds) {
+          roundsList = roundsData.rounds;
+        } else if (Array.isArray(roundsData)) {
+          roundsList = roundsData;
+        }
+        
+        console.log('Rounds list:', roundsList); // Debug log
+        setRounds(roundsList);
         
         // Extract unique courses
-        const uniqueCourses = roundsData.rounds.reduce((acc, round) => {
+        const uniqueCourses = roundsList.reduce((acc, round) => {
           if (round.course && !acc.find(c => c.id === round.course.id)) {
             acc.push(round.course);
           }
           return acc;
         }, []);
         setCourses(uniqueCourses);
+      } else {
+        console.error('API Error:', roundsResponse.status, roundsResponse.statusText);
+        // Try to get error message
+        try {
+          const errorData = await roundsResponse.json();
+          console.error('Error details:', errorData);
+        } catch (e) {
+          console.error('Could not parse error response');
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
+      console.error('API URL:', `${API_CONFIG.BASE_URL}/rounds`);
+      
+      // Try to load from local storage as fallback
+      try {
+        const localRounds = await AsyncStorage.getItem('golf_round_history');
+        if (localRounds) {
+          const parsedRounds = JSON.parse(localRounds);
+          console.log('Loaded from local storage:', parsedRounds.length, 'rounds');
+          setRounds(parsedRounds);
+          
+          // Extract unique courses from local data
+          const uniqueCourses = parsedRounds.reduce((acc, round) => {
+            if (round.course && !acc.find(c => c.id === round.course.id)) {
+              acc.push(round.course);
+            }
+            return acc;
+          }, []);
+          setCourses(uniqueCourses);
+        }
+      } catch (localError) {
+        console.error('Error loading from local storage:', localError);
+      }
     } finally {
       setIsLoading(false);
     }
