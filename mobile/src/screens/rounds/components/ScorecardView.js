@@ -287,7 +287,8 @@ const ScorecardView = ({
 
   // Get course progress tracking data
   const getCourseProgressData = () => {
-    if (!historicalData || !playedHoles.length) {
+    const playedHolesInProgress = Object.keys(scores).filter(hole => scores[hole] > 0);
+    if (!historicalData || !playedHolesInProgress.length) {
       return null;
     }
     
@@ -304,15 +305,14 @@ const ScorecardView = ({
     const bestHistoricalScore = Math.min(...historicalScores);
     
     // Calculate projected score based on current pace
-    const playedHoles = Object.keys(scores).filter(hole => scores[hole] > 0);
-    const currentPace = totalScore / playedHoles.length;
+    const currentPace = totalScore / playedHolesInProgress.length;
     const projectedScore = Math.round(currentPace * 18);
     
     // Calculate comparison to historical average
     const vsHistoricalAvg = projectedScore - avgHistoricalScore;
     
     // Calculate remaining holes average needed for personal best
-    const remainingHoles = 18 - playedHoles.length;
+    const remainingHoles = 18 - playedHolesInProgress.length;
     const neededForPB = remainingHoles > 0 ? (bestHistoricalScore - totalScore) / remainingHoles : 0;
     
     return {
@@ -427,7 +427,7 @@ const ScorecardView = ({
 
     const totalCoursePar = isRoundComplete 
       ? holes.reduce((sum, hole) => sum + hole.par, 0)
-      : playedHoles.reduce((sum, hole) => sum + hole.par, 0);
+      : holes.filter(hole => scores[hole.holeNumber] > 0).reduce((sum, hole) => sum + hole.par, 0);
     
     const finalScore = totalScore;
     const finalScoreToPar = finalScore - totalCoursePar;

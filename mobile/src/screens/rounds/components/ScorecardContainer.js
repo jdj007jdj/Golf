@@ -292,7 +292,11 @@ const ScorecardContainer = ({ route, navigation }) => {
           console.log('🔍 ScorecardContainer: Hole analysis:', holeAnalysis);
           console.log('🔍 ScorecardContainer: Club analysis:', clubAnalysis);
           
-          setHistoricalData(holeAnalysis);
+          setHistoricalData({
+            ...holeAnalysis,
+            rounds: courseRounds,
+            totalRounds: courseRounds.length
+          });
           setClubData(clubAnalysis);
           console.log('✅ ScorecardContainer: Historical data loaded successfully');
         } else {
@@ -338,7 +342,11 @@ const ScorecardContainer = ({ route, navigation }) => {
             const holeAnalysis = coursePerformanceUtils.calculateHolePerformance(courseRounds, course);
             const clubAnalysis = coursePerformanceUtils.analyzeClubUsage(courseRounds);
             
-            setHistoricalData(holeAnalysis);
+            setHistoricalData({
+              ...holeAnalysis,
+              rounds: courseRounds,
+              totalRounds: courseRounds.length
+            });
             setClubData(clubAnalysis);
             console.log('✅ ScorecardContainer: Historical data loaded from backend successfully');
           }
