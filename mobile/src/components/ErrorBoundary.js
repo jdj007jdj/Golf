@@ -14,7 +14,7 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error('🚨 ERROR BOUNDARY CAUGHT ERROR:', error);
     console.error('🚨 ERROR INFO:', errorInfo);
-    console.error('🚨 COMPONENT STACK:', errorInfo.componentStack);
+    console.error('🚨 COMPONENT STACK:', errorInfo?.componentStack || 'No component stack available');
     
     this.setState({
       error: error,
@@ -31,7 +31,7 @@ class ErrorBoundary extends React.Component {
             {this.state.error && this.state.error.toString()}
           </Text>
           <Text style={styles.errorStack}>
-            {this.state.errorInfo.componentStack}
+            {this.state.errorInfo?.componentStack || 'No stack trace available'}
           </Text>
           <TouchableOpacity 
             style={styles.retryButton}

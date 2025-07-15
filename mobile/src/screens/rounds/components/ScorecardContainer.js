@@ -270,32 +270,86 @@ const ScorecardContainer = ({ route, navigation }) => {
   const loadHistoricalData = async () => {
     try {
       console.log('🔍 ScorecardContainer: Loading historical data...');
+      console.log('🔍 ScorecardContainer: Course ID:', course.id);
+      console.log('🔍 ScorecardContainer: Course object:', course);
+      
       const roundsData = await AsyncStorage.getItem('golf_round_history');
       if (roundsData) {
         const rounds = JSON.parse(roundsData);
         console.log('✅ ScorecardContainer: Found', rounds.length, 'rounds in history');
+        console.log('🔍 ScorecardContainer: Sample round:', rounds[0]);
         
         // Use the imported coursePerformanceUtils object
         const courseRounds = coursePerformanceUtils.filterRoundsByCourse(rounds, course.id);
         console.log('✅ ScorecardContainer: Found', courseRounds.length, 'rounds for this course');
+        console.log('🔍 ScorecardContainer: Course rounds:', courseRounds);
         
         if (courseRounds.length > 0) {
-          const holeAnalysis = {};
-          holes.forEach(hole => {
-            holeAnalysis[hole.holeNumber] = coursePerformanceUtils.calculateHolePerformance(courseRounds, hole.holeNumber);
-          });
-          
+          // Get comprehensive hole analysis for the entire course
+          const holeAnalysis = coursePerformanceUtils.calculateHolePerformance(courseRounds, course);
           const clubAnalysis = coursePerformanceUtils.analyzeClubUsage(courseRounds);
+          
+          console.log('🔍 ScorecardContainer: Hole analysis:', holeAnalysis);
+          console.log('🔍 ScorecardContainer: Club analysis:', clubAnalysis);
           
           setHistoricalData(holeAnalysis);
           setClubData(clubAnalysis);
           console.log('✅ ScorecardContainer: Historical data loaded successfully');
+        } else {
+          console.log('⚠️ ScorecardContainer: No rounds found for this course');
+          console.log('🔍 ScorecardContainer: Available course IDs in rounds:', rounds.map(r => r.courseId || r.course_id || r.course?.id).filter(Boolean));
         }
       } else {
-        console.log('ℹ️  ScorecardContainer: No historical data found');
+        console.log('ℹ️  ScorecardContainer: No historical data found in AsyncStorage');
+        console.log('🔍 ScorecardContainer: Attempting to fetch from backend...');
+        await fetchHistoricalDataFromBackend();
       }
     } catch (error) {
       console.error('❌ ScorecardContainer: Error loading historical data:', error);
+    }
+  };
+
+  // Fetch historical data from backend
+  const fetchHistoricalDataFromBackend = async () => {
+    try {
+      console.log('🔍 ScorecardContainer: Fetching rounds from backend...');
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/rounds`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data && data.data.length > 0) {
+          console.log('✅ ScorecardContainer: Fetched', data.data.length, 'rounds from backend');
+          
+          // Save to AsyncStorage for future use
+          await AsyncStorage.setItem('golf_round_history', JSON.stringify(data.data));
+          
+          // Process the data
+          const courseRounds = coursePerformanceUtils.filterRoundsByCourse(data.data, course.id);
+          console.log('✅ ScorecardContainer: Found', courseRounds.length, 'rounds for this course from backend');
+          
+          if (courseRounds.length > 0) {
+            // Get comprehensive hole analysis for the entire course
+            const holeAnalysis = coursePerformanceUtils.calculateHolePerformance(courseRounds, course);
+            const clubAnalysis = coursePerformanceUtils.analyzeClubUsage(courseRounds);
+            
+            setHistoricalData(holeAnalysis);
+            setClubData(clubAnalysis);
+            console.log('✅ ScorecardContainer: Historical data loaded from backend successfully');
+          }
+        } else {
+          console.log('ℹ️  ScorecardContainer: No rounds found in backend response');
+        }
+      } else {
+        console.error('❌ ScorecardContainer: Failed to fetch rounds from backend:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ ScorecardContainer: Error fetching from backend:', error);
     }
   };
 
