@@ -45,6 +45,7 @@ const CourseMapView = React.memo(({
   
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
+  const isUpdatingRef = useRef(false);
   const apiKey = MAP_CONFIG.MAPTILER.API_KEY || '9VwMyrJdecjrEB6fwLGJ';
 
   const currentHoleData = holes.find(hole => hole.holeNumber === currentHole) || holes[0];
@@ -154,7 +155,8 @@ const CourseMapView = React.memo(({
 
   // Update tiles when map changes
   const onRegionDidChange = useCallback(async () => {
-    if (mapRef.current && mapReady) {
+    if (mapRef.current && mapReady && !isUpdatingRef.current) {
+      isUpdatingRef.current = true;
       try {
         const zoom = await mapRef.current.getZoom();
         const center = await mapRef.current.getCenter();
@@ -177,28 +179,37 @@ const CourseMapView = React.memo(({
           return;
         }
         
-        setCurrentZoom(zoom);
-        setCurrentCenter([lng, lat]);
+        // Only update if values actually changed
+        const zoomChanged = Math.abs(zoom - currentZoom) > 0.01;
+        const centerChanged = currentCenter && (
+          Math.abs(lng - currentCenter[0]) > 0.00001 || 
+          Math.abs(lat - currentCenter[1]) > 0.00001
+        );
         
-        const newTiles = calculateVisibleTiles([lng, lat], zoom, mapDimensions);
-        setTiles(newTiles);
-        
-        console.log(`🗺️ Map moved - Zoom: ${Math.floor(zoom)}, Tiles: ${newTiles.length}`);
+        if (zoomChanged || centerChanged || !currentCenter) {
+          setCurrentZoom(zoom);
+          setCurrentCenter([lng, lat]);
+          
+          const newTiles = calculateVisibleTiles([lng, lat], zoom, mapDimensions);
+          setTiles(newTiles);
+          
+          console.log(`🗺️ Map moved - Zoom: ${Math.floor(zoom)}, Tiles: ${newTiles.length}`);
+        }
       } catch (error) {
         console.error('Error updating map state:', error);
+      } finally {
+        isUpdatingRef.current = false;
       }
     }
-  }, [mapReady, mapDimensions]);
+  }, [mapReady, mapDimensions, currentZoom, currentCenter]);
 
   const onMapReady = () => {
     console.log('🗺️ MapViewMapLibre: Map ready');
     setMapReady(true);
-    // Set initial center
+    // Set initial center and tiles
     setCurrentCenter(centerCoordinate);
-    // Trigger initial tile calculation
-    setTimeout(() => {
-      onRegionDidChange();
-    }, 100);
+    const initialTiles = calculateVisibleTiles(centerCoordinate, 16, mapDimensions);
+    setTiles(initialTiles);
   };
 
   const onUserLocationUpdate = (location) => {

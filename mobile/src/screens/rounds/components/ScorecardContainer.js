@@ -25,9 +25,40 @@ import AchievementPopup from '../../../components/AchievementPopup';
 import ScorecardView from './ScorecardView';
 import CourseMapView from './MapViewMapLibre';
 import SharedHeader from './SharedHeader';
+import { ScorecardProvider, useScorecardContext } from '../contexts/ScorecardContext';
 
 const { width } = Dimensions.get('window');
 const Tab = createMaterialTopTabNavigator();
+
+// Create stable component references for tabs
+const MapTab = React.memo(() => {
+  const { 
+    round, 
+    course, 
+    holes, 
+    currentHole, 
+    setCurrentHole, 
+    scores, 
+    settings 
+  } = useScorecardContext();
+  
+  return (
+    <CourseMapView
+      round={round}
+      course={course}
+      holes={holes}
+      currentHole={currentHole}
+      setCurrentHole={setCurrentHole}
+      scores={scores}
+      settings={settings}
+    />
+  );
+});
+
+const ScorecardTab = React.memo(() => {
+  const contextValue = useScorecardContext();
+  return <ScorecardView {...contextValue} />;
+});
 
 const ScorecardContainer = ({ route, navigation }) => {
   const { round, course } = route.params;
@@ -254,49 +285,41 @@ const ScorecardContainer = ({ route, navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
-      <SharedHeader
-        navigation={navigation}
-        onSettingsPress={handleSettings}
-        title="Scorecard"
-      />
-      
-      <Tab.Navigator
-        screenOptions={{
-          tabBarActiveTintColor: '#2e7d32',
-          tabBarInactiveTintColor: '#666',
-          tabBarIndicatorStyle: { backgroundColor: '#2e7d32' },
-          tabBarStyle: { backgroundColor: '#fff' },
-          tabBarLabelStyle: { fontSize: 16, fontWeight: 'bold' },
-        }}
-      >
-        <Tab.Screen 
-          name="Score"
-          children={() => <ScorecardView {...sharedProps} />}
+    <ScorecardProvider value={sharedProps}>
+      <View style={styles.container}>
+        <SharedHeader
+          navigation={navigation}
+          onSettingsPress={handleSettings}
+          title="Scorecard"
         />
-        <Tab.Screen 
-          name="Map"
-          children={() => (
-            <CourseMapView 
-              round={round}
-              course={course}
-              holes={holes}
-              currentHole={currentHole}
-              setCurrentHole={setCurrentHole}
-              scores={scores}
-              settings={settings}
-            />
-          )}
+        
+        <Tab.Navigator
+          screenOptions={{
+            tabBarActiveTintColor: '#2e7d32',
+            tabBarInactiveTintColor: '#666',
+            tabBarIndicatorStyle: { backgroundColor: '#2e7d32' },
+            tabBarStyle: { backgroundColor: '#fff' },
+            tabBarLabelStyle: { fontSize: 16, fontWeight: 'bold' },
+          }}
+        >
+          <Tab.Screen 
+            name="Score"
+            component={ScorecardTab}
+          />
+          <Tab.Screen 
+            name="Map"
+            component={MapTab}
+          />
+        </Tab.Navigator>
+        
+        {/* Achievement Popup */}
+        <AchievementPopup
+          visible={showAchievements}
+          achievements={currentAchievements}
+          onClose={() => setShowAchievements(false)}
         />
-      </Tab.Navigator>
-      
-      {/* Achievement Popup */}
-      <AchievementPopup
-        visible={showAchievements}
-        achievements={currentAchievements}
-        onClose={() => setShowAchievements(false)}
-      />
-    </View>
+      </View>
+    </ScorecardProvider>
   );
 };
 
