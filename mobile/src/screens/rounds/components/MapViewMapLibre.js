@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -56,9 +56,11 @@ const CourseMapView = React.memo(({
 
   // Initialize and request permissions
   useEffect(() => {
+    let mounted = true;
+    
     const init = async () => {
       try {
-        setLoading(true);
+        if (mounted) setLoading(true);
         
         // Request location permission
         const permission = Platform.OS === 'ios' 
@@ -67,22 +69,28 @@ const CourseMapView = React.memo(({
 
         const result = await request(permission);
         
-        if (result === RESULTS.GRANTED) {
-          setHasLocationPermission(true);
-          console.log('✅ Location permission granted');
-        } else {
-          setHasLocationPermission(false);
-          console.log('❌ Location permission denied');
+        if (mounted) {
+          if (result === RESULTS.GRANTED) {
+            setHasLocationPermission(true);
+            console.log('✅ Location permission granted');
+          } else {
+            setHasLocationPermission(false);
+            console.log('❌ Location permission denied');
+          }
         }
       } catch (error) {
         console.error('Initialization error:', error);
-        setHasLocationPermission(false);
+        if (mounted) setHasLocationPermission(false);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     init();
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // Calculate which tiles we need for current view
@@ -145,7 +153,7 @@ const CourseMapView = React.memo(({
   };
 
   // Update tiles when map changes
-  const onRegionDidChange = async () => {
+  const onRegionDidChange = useCallback(async () => {
     if (mapRef.current && mapReady) {
       try {
         const zoom = await mapRef.current.getZoom();
@@ -180,7 +188,7 @@ const CourseMapView = React.memo(({
         console.error('Error updating map state:', error);
       }
     }
-  };
+  }, [mapReady, mapDimensions]);
 
   const onMapReady = () => {
     console.log('🗺️ MapViewMapLibre: Map ready');
@@ -517,4 +525,16 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CourseMapView;
+// Custom comparison function to prevent unnecessary re-renders
+const arePropsEqual = (prevProps, nextProps) => {
+  return (
+    prevProps.round?.id === nextProps.round?.id &&
+    prevProps.course?.id === nextProps.course?.id &&
+    prevProps.currentHole === nextProps.currentHole &&
+    prevProps.holes?.length === nextProps.holes?.length &&
+    prevProps.scores === nextProps.scores &&
+    prevProps.settings === nextProps.settings
+  );
+};
+
+export default React.memo(CourseMapView, arePropsEqual);

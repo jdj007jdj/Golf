@@ -276,7 +276,17 @@ const ScorecardContainer = ({ route, navigation }) => {
         />
         <Tab.Screen 
           name="Map"
-          children={() => <CourseMapView {...sharedProps} />}
+          children={() => (
+            <CourseMapView 
+              round={round}
+              course={course}
+              holes={holes}
+              currentHole={currentHole}
+              setCurrentHole={setCurrentHole}
+              scores={scores}
+              settings={settings}
+            />
+          )}
         />
       </Tab.Navigator>
       
