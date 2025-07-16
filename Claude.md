@@ -180,23 +180,35 @@ The plan contains 5 phases from Foundation Stabilization to Advanced Features. A
 - MapTiler API key: 9VwMyrJdecjrEB6fwLGJ
 - Current course: Augusta National (33.5031, -82.0206)
 
-### MapLibre React Native Bridgeless Mode Issue (Critical)
+### MapLibre React Native Bridgeless Mode Issue (Critical) - SOLVED
 **Problem**: MapLibre GL v10.2.0 is incompatible with React Native 0.76.5's bridgeless mode
 - All MapLibre native HTTP requests get canceled
-- React Native's JavaScript fetch() works fine
+- `onRegionIsChanging` events don't fire consistently
 - MapLibre falls back to default vector tiles when external sources fail
 
-**Workaround Implemented**:
-1. Created `SatelliteMapView` component that uses MapLibre's ImageSource
-2. Tiles are loaded via JavaScript fetch() instead of native HTTP
-3. Works without rebuilding APK (hot reload compatible)
+**Final Solution Implemented**:
+1. **Custom Gesture Handling**: Use React Native's PanResponder to capture gestures directly
+2. **Custom Tile Loading**: TileImage component using fetch() + base64 conversion
+3. **Animated Transforms**: Real-time tile movement with Animated.ValueXY
+4. **Manual Coordinate Calculations**: Calculate new map center based on pan distance
 
 **Files Created**:
-- `/mobile/src/components/SatelliteMapView.js` - Working satellite map component
-- `/mobile/src/utils/MapTilerProxy.js` - Tile fetching utilities
-- `/mobile/src/utils/CustomTileSource.js` - Custom tile source implementation
-- `/mobile/src/TestMapScreen.js` - Test screen to verify satellite tiles
+- `/mobile/src/screens/rounds/components/MapViewWithGestures.js` - Complete custom map solution
+- `/mobile/src/components/TileImage.js` - Custom tile loader with fetch()
+- `/mobile/src/screens/rounds/contexts/ScorecardContext.js` - Context to prevent remounting
+- `/mobile/src/screens/rounds/components/SmoothTileOverlay.js` - Intermediate attempt (not used)
+- `/mobile/src/screens/rounds/components/MapViewSmooth.js` - Intermediate attempt (not used)
 
-**To continue MapLibre migration**:
-- Replace MapView.js with SatelliteMapView approach
-- Remove test files once migration complete
+**Key Discoveries**:
+- MapLibre's gesture events are unreliable in bridgeless mode
+- PanResponder provides better control than MapLibre's native gestures
+- Custom tile loading with fetch() bypasses all HTTP issues
+- Animated transforms provide smooth user experience
+
+**Current Status**: 
+- ✅ Smooth panning with immediate visual feedback
+- ✅ Tiles move with finger during pan gestures
+- ✅ New tiles load when panning to new areas
+- ✅ Zoom support with pinch gestures
+- ✅ User location button for navigation
+- ✅ Works perfectly in React Native 0.76.5 bridgeless mode

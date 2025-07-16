@@ -23,7 +23,7 @@ import {
 } from '../../../utils/coursePerformanceUtils';
 import AchievementPopup from '../../../components/AchievementPopup';
 import ScorecardView from './ScorecardView';
-import CourseMapView from './MapViewMapLibre';
+import CourseMapView from './MapViewWithGestures';
 import SharedHeader from './SharedHeader';
 import { ScorecardProvider, useScorecardContext } from '../contexts/ScorecardContext';
 

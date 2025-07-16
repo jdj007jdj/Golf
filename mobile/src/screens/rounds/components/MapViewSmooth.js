@@ -8,11 +8,11 @@ import {
   Image,
   Platform,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import MapLibreGL from '@maplibre/maplibre-react-native';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { MAP_CONFIG } from '../../../config/mapConfig';
-import SmoothTileOverlay from './SmoothTileOverlay';
 
 // Set access token to null (MapLibre doesn't require it)
 MapLibreGL.setAccessToken(null);
@@ -28,11 +28,7 @@ const CourseMapView = React.memo(({
   scores,
   settings 
 }) => {
-  console.log('🗺️ MapViewMapLibre: Component mounting with props:', { 
-    hasCourse: !!course, 
-    hasHoles: !!holes, 
-    currentHole 
-  });
+  console.log('🗺️ MapViewSmooth: Component mounting');
 
   // State management
   const [loading, setLoading] = useState(true);
@@ -40,9 +36,26 @@ const CourseMapView = React.memo(({
   const [hasLocationPermission, setHasLocationPermission] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   
-  // Callbacks for tile overlay
-  const onRegionIsChangingCallback = useRef(null);
-  const onRegionDidChangeCallback = useRef(null);
+  // Camera tracking state
+  const [cameraState, setCameraState] = useState({
+    center: null,
+    zoom: 16,
+    heading: 0,
+    pitch: 0,
+    bounds: null
+  });
+  
+  // Gesture state
+  const [isMoving, setIsMoving] = useState(false);
+  const [lastCenter, setLastCenter] = useState(null);
+  
+  // Tile state
+  const [tiles, setTiles] = useState([]);
+  const [tileCache] = useState(new Map());
+  
+  // Animated values for smooth movement
+  const panOffset = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const tileOpacity = useRef(new Animated.Value(1)).current;
   
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
@@ -94,33 +107,182 @@ const CourseMapView = React.memo(({
     };
   }, []);
 
+  // Convert geographic coordinates to screen pixels
+  const coordinateToPixel = useCallback((lng, lat, centerLng, centerLat, zoom) => {
+    const scale = Math.pow(2, zoom) * 256;
+    
+    // Convert to Web Mercator
+    const centerX = (centerLng + 180) / 360;
+    const centerY = (1 - Math.log(Math.tan(centerLat * Math.PI / 180) + 1 / Math.cos(centerLat * Math.PI / 180)) / Math.PI) / 2;
+    
+    const x = (lng + 180) / 360;
+    const y = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2;
+    
+    // Calculate pixel offset from center
+    const pixelX = (x - centerX) * scale;
+    const pixelY = (y - centerY) * scale;
+    
+    return { x: pixelX, y: pixelY };
+  }, []);
 
+  // Calculate which tiles we need for current view
+  const calculateVisibleTiles = useCallback((center, zoom, viewportWidth, viewportHeight) => {
+    if (!center || center.length !== 2) return [];
+    
+    const [lng, lat] = center;
+    const z = Math.floor(zoom);
+    
+    // Calculate tile at center
+    const centerTileX = Math.floor((lng + 180) / 360 * Math.pow(2, z));
+    const centerTileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z));
+    
+    // Calculate how many tiles we need (with buffer for smooth panning)
+    const tilesPerViewportWidth = Math.ceil(viewportWidth / 256) + 2;
+    const tilesPerViewportHeight = Math.ceil(viewportHeight / 256) + 2;
+    
+    const tiles = [];
+    const halfWidth = Math.ceil(tilesPerViewportWidth / 2);
+    const halfHeight = Math.ceil(tilesPerViewportHeight / 2);
+    
+    for (let dx = -halfWidth; dx <= halfWidth; dx++) {
+      for (let dy = -halfHeight; dy <= halfHeight; dy++) {
+        const x = centerTileX + dx;
+        const y = centerTileY + dy;
+        
+        // Skip invalid tiles
+        if (x < 0 || y < 0 || x >= Math.pow(2, z) || y >= Math.pow(2, z)) continue;
+        
+        // Calculate geographic bounds for this tile
+        const n = Math.PI - 2 * Math.PI * y / Math.pow(2, z);
+        const tileLat = 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+        const tileLng = x / Math.pow(2, z) * 360 - 180;
+        
+        // Calculate pixel position relative to center
+        const tilePixelOffset = coordinateToPixel(tileLng, tileLat, lng, lat, zoom);
+        
+        tiles.push({
+          x, y, z,
+          key: `${z}-${x}-${y}`,
+          url: `https://api.maptiler.com/tiles/satellite-v2/${z}/${x}/${y}.jpg?key=${apiKey}`,
+          pixelX: tilePixelOffset.x + width / 2,
+          pixelY: tilePixelOffset.y + height / 2,
+          lng: tileLng,
+          lat: tileLat
+        });
+      }
+    }
+    
+    return tiles;
+  }, [coordinateToPixel, apiKey]);
+
+  // Handle map ready
   const onMapReady = () => {
-    console.log('🗺️ MapViewMapLibre: Map ready');
+    console.log('🗺️ MapViewSmooth: Map ready');
     setMapReady(true);
+    
+    // Set initial tiles
+    const initialTiles = calculateVisibleTiles(centerCoordinate, 16, width, 400);
+    setTiles(initialTiles);
+    setCameraState(prev => ({ ...prev, center: centerCoordinate }));
+    setLastCenter(centerCoordinate);
   };
+
+  // Handle region will change (gesture started)
+  const onRegionWillChange = useCallback(() => {
+    console.log('🗺️ Gesture started');
+    setIsMoving(true);
+    
+    // Fade tiles slightly during movement for performance
+    Animated.timing(tileOpacity, {
+      toValue: 0.8,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  // Handle region is changing (continuous updates during gesture)
+  const onRegionIsChanging = useCallback(async (feature) => {
+    if (!mapRef.current || !lastCenter) return;
+    
+    try {
+      // Get current camera position
+      const center = await mapRef.current.getCenter();
+      const zoom = await mapRef.current.getZoom();
+      
+      let lng, lat;
+      if (Array.isArray(center)) {
+        [lng, lat] = center;
+      } else if (center && typeof center === 'object') {
+        lng = center.longitude || center.lng;
+        lat = center.latitude || center.lat;
+      }
+      
+      if (!lng || !lat || isNaN(lng) || isNaN(lat)) return;
+      
+      // Calculate pixel offset from last center
+      const offset = coordinateToPixel(lng, lat, lastCenter[0], lastCenter[1], zoom);
+      
+      // Apply smooth transform to tile container
+      panOffset.setValue({ x: -offset.x, y: -offset.y });
+      
+      // Update camera state
+      setCameraState({
+        center: [lng, lat],
+        zoom: zoom,
+        heading: feature.properties.heading || 0,
+        pitch: feature.properties.pitch || 0,
+        bounds: feature.properties.visibleBounds
+      });
+    } catch (error) {
+      console.error('Error in onRegionIsChanging:', error);
+    }
+  }, [lastCenter, coordinateToPixel]);
+
+  // Handle region did change (gesture ended)
+  const onRegionDidChange = useCallback(async () => {
+    console.log('🗺️ Gesture ended');
+    setIsMoving(false);
+    
+    if (!mapRef.current) return;
+    
+    try {
+      // Get final camera position
+      const center = await mapRef.current.getCenter();
+      const zoom = await mapRef.current.getZoom();
+      
+      let lng, lat;
+      if (Array.isArray(center)) {
+        [lng, lat] = center;
+      } else if (center && typeof center === 'object') {
+        lng = center.longitude || center.lng;
+        lat = center.latitude || center.lat;
+      }
+      
+      if (!lng || !lat || isNaN(lng) || isNaN(lat)) return;
+      
+      // Update tiles for new position
+      const newTiles = calculateVisibleTiles([lng, lat], zoom, width, 400);
+      setTiles(newTiles);
+      setLastCenter([lng, lat]);
+      
+      // Reset transform
+      panOffset.setValue({ x: 0, y: 0 });
+      
+      // Restore opacity
+      Animated.timing(tileOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } catch (error) {
+      console.error('Error in onRegionDidChange:', error);
+    }
+  }, [calculateVisibleTiles]);
 
   const onUserLocationUpdate = (location) => {
     console.log('📍 User location updated:', location);
     setUserLocation(location);
   };
-  
-  // Map event handlers
-  const onRegionWillChange = useCallback(() => {
-    console.log('🗺️ Region will change');
-  }, []);
-  
-  const onRegionIsChanging = useCallback(() => {
-    if (onRegionIsChangingCallback.current) {
-      onRegionIsChangingCallback.current();
-    }
-  }, []);
-  
-  const onRegionDidChange = useCallback(() => {
-    if (onRegionDidChangeCallback.current) {
-      onRegionDidChangeCallback.current();
-    }
-  }, []);
 
   const flyToLocation = (longitude, latitude, zoom = 17) => {
     if (cameraRef.current) {
@@ -132,8 +294,8 @@ const CourseMapView = React.memo(({
     }
   };
 
-  // Simple base style with dark background
-  const baseStyle = {
+  // Simple style with no sources (we'll use overlay)
+  const mapStyle = {
     version: 8,
     sources: {},
     layers: [
@@ -141,7 +303,7 @@ const CourseMapView = React.memo(({
         id: 'background',
         type: 'background',
         paint: {
-          'background-color': '#1a1a1a'
+          'background-color': '#000'
         }
       }
     ]
@@ -158,24 +320,42 @@ const CourseMapView = React.memo(({
 
   return (
     <View style={styles.container}>
-      {/* Smooth tile overlay */}
-      <SmoothTileOverlay
-        mapRef={mapRef.current}
-        mapReady={mapReady}
-        apiKey={apiKey}
-        onRegionIsChanging={(callback) => {
-          onRegionIsChangingCallback.current = callback;
-        }}
-        onRegionDidChange={(callback) => {
-          onRegionDidChangeCallback.current = callback;
-        }}
-      />
-      
+      {/* Animated tile container */}
+      <Animated.View 
+        style={[
+          styles.tileContainer,
+          {
+            opacity: tileOpacity,
+            transform: [
+              { translateX: panOffset.x },
+              { translateY: panOffset.y }
+            ]
+          }
+        ]} 
+        pointerEvents="none"
+      >
+        {tiles.map((tile) => (
+          <Image
+            key={tile.key}
+            source={{ uri: tile.url }}
+            style={[
+              styles.tile,
+              {
+                left: tile.pixelX - 128,
+                top: tile.pixelY - 128,
+              }
+            ]}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
+        ))}
+      </Animated.View>
+
       {/* MapLibre GL Map View */}
       <MapLibreGL.MapView
         ref={mapRef}
         style={styles.map}
-        styleJSON={JSON.stringify(baseStyle)}
+        styleJSON={JSON.stringify(mapStyle)}
         onDidFinishLoadingMap={onMapReady}
         onRegionWillChange={onRegionWillChange}
         onRegionIsChanging={onRegionIsChanging}
@@ -193,7 +373,7 @@ const CourseMapView = React.memo(({
           maxZoomLevel={MAP_CONFIG.maxZoom || 20}
         />
 
-        {/* User Location - only show if permission granted */}
+        {/* User Location */}
         {hasLocationPermission && (
           <MapLibreGL.UserLocation
             visible={true}
@@ -214,7 +394,7 @@ const CourseMapView = React.memo(({
           <MapLibreGL.Callout title="Augusta National Golf Club" />
         </MapLibreGL.PointAnnotation>
 
-        {/* Current hole marker if available */}
+        {/* Current hole marker */}
         {currentHoleData && currentHoleData.greenLatitude && currentHoleData.greenLongitude && (
           <MapLibreGL.PointAnnotation
             id={`hole-${currentHole}`}
@@ -282,6 +462,14 @@ const CourseMapView = React.memo(({
         </View>
       </View>
 
+      {/* Debug info */}
+      {isMoving && (
+        <View style={styles.debugInfo}>
+          <Text style={styles.debugText}>Moving: {isMoving ? 'Yes' : 'No'}</Text>
+          <Text style={styles.debugText}>Zoom: {cameraState.zoom.toFixed(2)}</Text>
+        </View>
+      )}
+
       {/* MapTiler Attribution */}
       <View style={styles.attribution}>
         <Text style={styles.attributionText}>© MapTiler © OpenStreetMap</Text>
@@ -309,6 +497,15 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  tileContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+  },
+  tile: {
+    position: 'absolute',
+    width: 256,
+    height: 256,
   },
   markerContainer: {
     width: 30,
@@ -414,6 +611,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: '#999',
+  },
+  debugInfo: {
+    position: 'absolute',
+    top: 50,
+    left: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 10,
+    borderRadius: 5,
+    zIndex: 3,
+  },
+  debugText: {
+    color: 'white',
+    fontSize: 12,
   },
   attribution: {
     position: 'absolute',
