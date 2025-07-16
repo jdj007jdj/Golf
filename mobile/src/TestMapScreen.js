@@ -4,6 +4,7 @@ import MapLibreGL from '@maplibre/maplibre-react-native';
 import { mapTilerProxy } from './utils/MapTilerProxy';
 import { customTileSource } from './utils/CustomTileSource';
 import SatelliteMapView from './components/SatelliteMapView';
+import SatelliteMapOverlay from './components/SatelliteMapOverlay';
 
 // Set access token to null
 MapLibreGL.setAccessToken(null);
@@ -132,11 +133,11 @@ const TestMapScreen = () => {
         )}
       </View>
 
-      {/* Test 2: Custom Satellite Map Component */}
+      {/* Test 2: Satellite Map with Overlay Approach */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Custom Satellite Map (Image Overlays):</Text>
+        <Text style={styles.sectionTitle}>Satellite Map (Overlay Approach):</Text>
         <View style={styles.mapView}>
-          <SatelliteMapView 
+          <SatelliteMapOverlay 
             centerCoordinate={[-82.0206, 33.5031]}
             initialZoom={16}
           />

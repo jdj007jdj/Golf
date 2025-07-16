@@ -45,11 +45,15 @@ const SatelliteTileOverlay = ({ zoom, bounds }) => {
     return [[west, south], [east, north]];
   };
 
+  console.log(`📍 SatelliteTileOverlay: Rendering ${tiles.length} tiles at zoom ${zoom}`);
+
   return (
     <>
-      {tiles.map(tile => {
+      {tiles.map((tile, index) => {
         const tileUrl = `https://api.maptiler.com/tiles/satellite-v2/${tile.z}/${tile.x}/${tile.y}.jpg?key=${apiKey}`;
         const tileBounds = getTileBounds(tile.x, tile.y, tile.z);
+        
+        console.log(`🏞️ Tile ${index}: ${tile.z}/${tile.x}/${tile.y} - Bounds:`, tileBounds);
         
         return (
           <MapLibreGL.ImageSource
@@ -77,6 +81,7 @@ const SatelliteTileOverlay = ({ zoom, bounds }) => {
 const SatelliteMapView = ({ centerCoordinate = [-82.0206, 33.5031], initialZoom = 16 }) => {
   const [currentZoom, setCurrentZoom] = useState(initialZoom);
   const [currentBounds, setCurrentBounds] = useState(null);
+  const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
 
@@ -86,18 +91,33 @@ const SatelliteMapView = ({ centerCoordinate = [-82.0206, 33.5031], initialZoom 
         const zoom = await mapRef.current.getZoom();
         const bounds = await mapRef.current.getVisibleBounds();
         setCurrentZoom(Math.floor(zoom));
-        setCurrentBounds(bounds);
-        console.log('🗺️ Region changed - Zoom:', Math.floor(zoom));
+        
+        // MapLibre returns bounds as [[west, south], [east, north]]
+        if (bounds && bounds.length === 2) {
+          const [[west, south], [east, north]] = bounds;
+          setCurrentBounds([west, south, east, north]);
+          console.log('🗺️ Region changed - Zoom:', Math.floor(zoom), 'Bounds:', [west, south, east, north]);
+        }
       } catch (error) {
         console.error('Error getting map state:', error);
       }
     }
   };
 
-  // Basic style with just a background
+  // Style with MapTiler satellite source
   const baseStyle = {
     version: 8,
-    sources: {},
+    sources: {
+      'satellite': {
+        type: 'raster',
+        tiles: [
+          `https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=9VwMyrJdecjrEB6fwLGJ`
+        ],
+        tileSize: 256,
+        attribution: '© MapTiler',
+        maxzoom: 19
+      }
+    },
     layers: [
       {
         id: 'background',
@@ -105,8 +125,23 @@ const SatelliteMapView = ({ centerCoordinate = [-82.0206, 33.5031], initialZoom 
         paint: {
           'background-color': '#000000'
         }
+      },
+      {
+        id: 'satellite-layer',
+        type: 'raster',
+        source: 'satellite',
+        paint: {
+          'raster-opacity': 1
+        }
       }
     ]
+  };
+
+  const onMapReady = () => {
+    console.log('🗺️ SatelliteMapView: Map ready');
+    setMapReady(true);
+    // Trigger initial bounds calculation
+    onRegionDidChange();
   };
 
   return (
@@ -115,6 +150,7 @@ const SatelliteMapView = ({ centerCoordinate = [-82.0206, 33.5031], initialZoom 
         ref={mapRef}
         style={styles.map}
         styleJSON={JSON.stringify(baseStyle)}
+        onDidFinishLoadingMap={onMapReady}
         onRegionDidChange={onRegionDidChange}
         logoEnabled={false}
         attributionEnabled={false}
@@ -126,12 +162,13 @@ const SatelliteMapView = ({ centerCoordinate = [-82.0206, 33.5031], initialZoom 
         />
         
         {/* Render satellite tiles as image overlays */}
-        {currentBounds && (
+        {/* Commenting out overlay approach - testing direct raster source */}
+        {/* currentBounds && mapReady && (
           <SatelliteTileOverlay 
             zoom={currentZoom} 
             bounds={currentBounds}
           />
-        )}
+        ) */}
       </MapLibreGL.MapView>
     </View>
   );
