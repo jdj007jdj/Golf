@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, Image, ActivityIndicator, ScrollView } from 'react-native';
 import MapLibreGL from '@maplibre/maplibre-react-native';
-import { mapTilerProxy } from '../utils/MapTilerProxy';
-import { customTileSource } from '../utils/CustomTileSource';
+import { mapTilerProxy } from './utils/MapTilerProxy';
+import { customTileSource } from './utils/CustomTileSource';
+import SatelliteMapView from './components/SatelliteMapView';
 
 // Set access token to null
 MapLibreGL.setAccessToken(null);
@@ -59,9 +60,41 @@ const TestMapScreen = () => {
   };
 
   const loadProxiedStyle = async () => {
-    console.log('🧪 Loading MapTiler satellite style...');
-    const style = await mapTilerProxy.getProxiedStyle();
-    setProxiedStyle(style);
+    console.log('🧪 Creating custom satellite style...');
+    
+    // Create a custom style with a local tile source
+    // Since MapLibre can't fetch external URLs, we'll create a style
+    // that references a custom protocol we can intercept
+    const customStyle = {
+      version: 8,
+      sources: {
+        'satellite': {
+          type: 'raster',
+          tiles: [
+            // Use a custom protocol that we'll intercept
+            'maptiler://tiles/{z}/{x}/{y}'
+          ],
+          tileSize: 256,
+          attribution: '© MapTiler',
+          scheme: 'xyz',
+          maxzoom: 19
+        }
+      },
+      layers: [
+        {
+          id: 'satellite-layer',
+          type: 'raster',
+          source: 'satellite',
+          minzoom: 0,
+          maxzoom: 22,
+          paint: {
+            'raster-opacity': 1
+          }
+        }
+      ]
+    };
+    
+    setProxiedStyle(customStyle);
   };
 
   const onMapReady = () => {
@@ -99,26 +132,15 @@ const TestMapScreen = () => {
         )}
       </View>
 
-      {/* Test 2: MapLibre with satellite style */}
+      {/* Test 2: Custom Satellite Map Component */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>MapLibre with Satellite Style:</Text>
-        {proxiedStyle ? (
-          <MapLibreGL.MapView
-            style={styles.mapView}
-            styleJSON={JSON.stringify(proxiedStyle)}
-            onDidFinishLoadingMap={onMapReady}
-            onDidFailLoadingMap={onMapError}
-            logoEnabled={false}
-            attributionEnabled={false}
-          >
-            <MapLibreGL.Camera
-              centerCoordinate={[-82.0206, 33.5031]}
-              zoomLevel={16}
-            />
-          </MapLibreGL.MapView>
-        ) : (
-          <ActivityIndicator size="small" color="#2e7d32" />
-        )}
+        <Text style={styles.sectionTitle}>Custom Satellite Map (Image Overlays):</Text>
+        <View style={styles.mapView}>
+          <SatelliteMapView 
+            centerCoordinate={[-82.0206, 33.5031]}
+            initialZoom={16}
+          />
+        </View>
       </View>
       
       <Text style={styles.info}>Testing MapTiler satellite imagery in React Native</Text>
