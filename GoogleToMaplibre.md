@@ -92,6 +92,28 @@ Migrate from react-native-maps (Google Maps dependency) to MapLibre GL with MapT
 - [x] Distance measurements overlay (Pin/Front/Back/Center placeholders)
 - [x] Maintain state between tab switches (shared state in ScorecardContainer)
 
+### Phase 3.5: Bridgeless Mode Compatibility Issue Resolution
+
+#### Issue Discovered
+- [x] MapLibre GL v10.2.0 incompatible with React Native 0.76.5 bridgeless mode
+- [x] All native HTTP requests from MapLibre get canceled
+- [x] JavaScript fetch() works fine for accessing MapTiler API
+- [x] MapLibre falls back to vector tiles when satellite tiles fail
+
+#### Workaround Implemented
+- [x] Created SatelliteMapView component using ImageSource overlays
+- [x] Implemented JavaScript-based tile fetching via fetch()
+- [x] Created MapTilerProxy utility for tile management
+- [x] Created CustomTileSource for tile caching and conversion
+- [x] Tiles load successfully without native HTTP
+- [x] Works with hot reload (no APK rebuild needed)
+
+#### Files Created for Workaround
+- `/mobile/src/components/SatelliteMapView.js` - Working satellite map
+- `/mobile/src/utils/MapTilerProxy.js` - Tile proxy utilities
+- `/mobile/src/utils/CustomTileSource.js` - Tile fetching and caching
+- `/mobile/src/TestMapScreen.js` - Test implementation
+
 ### Phase 4: Testing & Optimization (30 min)
 
 #### 4.1 Functionality Testing
@@ -195,7 +217,7 @@ const satelliteStyle = {
 
 ## 📊 Success Criteria
 
-- [ ] Map displays satellite imagery from MapTiler
+- [x] Map displays satellite imagery from MapTiler (via workaround)
 - [x] No Google Maps API key required
 - [ ] User location tracking works
 - [ ] Hole markers display correctly

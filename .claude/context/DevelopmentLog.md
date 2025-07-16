@@ -228,3 +228,50 @@
   - **Focus**: GPS rangefinder and satellite maps for premium golf experience
   - **Implementation**: Major refactor of ScorecardScreen + MapTiler integration
   - **Timeline**: 4-5 weeks for complete GPS/Maps implementation
+
+## 2025-01-15 - MapLibre Bridgeless Mode Compatibility Issue
+
+### Problem Discovered
+- **Issue**: MapLibre GL v10.2.0 is incompatible with React Native 0.76.5's bridgeless mode
+- **Symptoms**: All MapLibre native HTTP requests get canceled, falling back to vector tiles
+- **Root Cause**: React Native 0.76.5 has bridgeless mode enabled by default
+- **Impact**: Cannot display satellite imagery using standard MapLibre approach
+
+### Investigation Process
+1. Created test screens to isolate the issue
+2. Confirmed JavaScript fetch() works perfectly for MapTiler API
+3. Discovered MapLibre's native HTTP stack is incompatible with bridgeless architecture
+4. Cannot disable bridgeless mode without rebuilding APK (user constraint)
+
+### Solution Implemented
+- **Approach**: JavaScript-based tile fetching workaround
+- **Implementation**: Created SatelliteMapView component using MapLibre's ImageSource
+- **Result**: Successfully displays satellite tiles without native HTTP requests
+- **Benefits**: Works with hot reload, no APK rebuild required
+
+### Files Created
+- `/mobile/src/components/SatelliteMapView.js` - Working satellite map component
+- `/mobile/src/utils/MapTilerProxy.js` - Tile fetching utilities
+- `/mobile/src/utils/CustomTileSource.js` - Custom tile source implementation
+- `/mobile/src/TestMapScreen.js` - Test screen to verify satellite tiles
+
+### Technical Details
+- MapLibre ImageSource components use React Native's Image loading mechanism
+- Tiles are fetched via JavaScript fetch() and rendered as overlays
+- Dynamic tile loading based on map bounds and zoom level
+- Tile caching implemented to improve performance
+
+### Commits
+- `2156fbf` - Implement MapTiler satellite tile fetch workaround
+- `84f9abb` - Revert bridgeless mode override in MainApplication.kt
+- `a208221` - MapTiler satellite tiles working via JavaScript fetch
+
+### Next Steps
+- Replace MapViewMapLibre.js with SatelliteMapView approach
+- Test GPS functionality with new implementation
+- Remove test files once migration is complete
+- Update production MapView component
+
+### Documentation Updated
+- Claude.md - Added bridgeless mode issue documentation
+- GoogleToMaplibre.md - Updated with Phase 3.5 workaround details

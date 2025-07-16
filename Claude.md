@@ -179,3 +179,24 @@ The plan contains 5 phases from Foundation Stabilization to Advanced Features. A
 - Google Maps requires API key to display map (shows black screen without it)
 - MapTiler API key: 9VwMyrJdecjrEB6fwLGJ
 - Current course: Augusta National (33.5031, -82.0206)
+
+### MapLibre React Native Bridgeless Mode Issue (Critical)
+**Problem**: MapLibre GL v10.2.0 is incompatible with React Native 0.76.5's bridgeless mode
+- All MapLibre native HTTP requests get canceled
+- React Native's JavaScript fetch() works fine
+- MapLibre falls back to default vector tiles when external sources fail
+
+**Workaround Implemented**:
+1. Created `SatelliteMapView` component that uses MapLibre's ImageSource
+2. Tiles are loaded via JavaScript fetch() instead of native HTTP
+3. Works without rebuilding APK (hot reload compatible)
+
+**Files Created**:
+- `/mobile/src/components/SatelliteMapView.js` - Working satellite map component
+- `/mobile/src/utils/MapTilerProxy.js` - Tile fetching utilities
+- `/mobile/src/utils/CustomTileSource.js` - Custom tile source implementation
+- `/mobile/src/TestMapScreen.js` - Test screen to verify satellite tiles
+
+**To continue MapLibre migration**:
+- Replace MapView.js with SatelliteMapView approach
+- Remove test files once migration complete
