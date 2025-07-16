@@ -15,6 +15,7 @@ import MapLibreGL from '@maplibre/maplibre-react-native';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { MAP_CONFIG } from '../../../config/mapConfig';
 import TileImage from '../../../components/TileImage';
+import tileCache from '../../../utils/tileCache';
 
 // Set access token to null (MapLibre doesn't require it)
 MapLibreGL.setAccessToken(null);
@@ -204,6 +205,22 @@ const CourseMapView = React.memo(({
       }
     })
   ).current;
+
+  // Log cache statistics periodically
+  useEffect(() => {
+    const logCacheStats = () => {
+      const stats = tileCache.getStats();
+      console.log(`📊 Cache Stats: ${stats.size}/${stats.maxSize} tiles, Hit rate: ${(stats.hitRate * 100).toFixed(1)}% (${stats.hits} hits, ${stats.misses} misses)`);
+    };
+
+    // Log stats every 30 seconds
+    const interval = setInterval(logCacheStats, 30000);
+    
+    // Log initial stats
+    logCacheStats();
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Initialize and request permissions
   useEffect(() => {
@@ -462,7 +479,7 @@ const CourseMapView = React.memo(({
                 height: 256,
               }
             ]}
-            onLoad={() => console.log(`✅ Tile loaded: ${tile.key}`)}
+            onLoad={() => {}}
             onError={(error) => console.error(`❌ Tile error: ${tile.key}`, error.nativeEvent.error)}
           />
         ))}
@@ -590,6 +607,7 @@ const CourseMapView = React.memo(({
         <Text style={styles.debugText}>Center: [{basePosition.center?.[0]?.toFixed(4) || 'N/A'}, {basePosition.center?.[1]?.toFixed(4) || 'N/A'}]</Text>
         <Text style={styles.debugText}>Tiles: {tiles.length}</Text>
         <Text style={styles.debugText}>Zoom: {basePosition.zoom?.toFixed(1) || 'N/A'}</Text>
+        <Text style={styles.debugText}>Cache: {tileCache.getStats().size}/{tileCache.getStats().maxSize}</Text>
       </View>
       
       {/* User location button */}

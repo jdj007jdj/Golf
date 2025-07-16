@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Image, View, ActivityIndicator, StyleSheet } from 'react-native';
+import tileCache from '../utils/tileCache';
 
 const TileImage = ({ tile, style, onLoad, onError }) => {
   const [imageData, setImageData] = useState(null);
@@ -14,6 +15,17 @@ const TileImage = ({ tile, style, onLoad, onError }) => {
         setLoading(true);
         setError(false);
         
+        // Check cache first
+        const cachedData = tileCache.get(tile.key);
+        if (cachedData) {
+          if (mounted) {
+            setImageData(cachedData);
+            setLoading(false);
+            if (onLoad) onLoad();
+          }
+          return;
+        }
+        
         // Use fetch to bypass bridgeless mode HTTP issues
         const response = await fetch(tile.url);
         
@@ -27,7 +39,10 @@ const TileImage = ({ tile, style, onLoad, onError }) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           if (mounted) {
-            setImageData(reader.result);
+            const dataUri = reader.result;
+            // Cache the result
+            tileCache.set(tile.key, dataUri);
+            setImageData(dataUri);
             setLoading(false);
             if (onLoad) onLoad();
           }
