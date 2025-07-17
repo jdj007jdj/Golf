@@ -30,11 +30,17 @@ export const AuthProvider = ({ children }) => {
       
       if (storedToken && storedUser) {
         // Verify token is still valid by making a test request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout for auth check
+        
         const response = await fetch(API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.AUTH.ME, {
           headers: {
             'Authorization': `Bearer ${storedToken}`,
           },
+          signal: controller.signal,
         });
+        
+        clearTimeout(timeoutId);
         
         if (response.ok) {
           setToken(storedToken);
@@ -58,13 +64,20 @@ export const AuthProvider = ({ children }) => {
     console.log('📧 Email:', email);
     
     try {
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const response = await fetch(API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.AUTH.LOGIN, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
       
       console.log('📡 Response received:', response.status, response.statusText);
       console.log('📡 Response ok:', response.ok);
@@ -101,9 +114,14 @@ export const AuthProvider = ({ children }) => {
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
       
+      let errorMessage = 'Network error. Please check your connection.';
+      if (error.name === 'AbortError') {
+        errorMessage = 'Login timed out. Please try again.';
+      }
+      
       return { 
         success: false, 
-        error: 'Network error. Please check your connection.' 
+        error: errorMessage 
       };
     }
   };
