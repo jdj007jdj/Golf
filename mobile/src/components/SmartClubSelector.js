@@ -20,6 +20,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import clubService from '../services/clubService';
 import { calculateDistance } from '../utils/gpsCalculations';
+import { useSettings } from '../contexts/SettingsContext';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -32,12 +33,30 @@ const SmartClubSelector = ({
   pinPosition,
   courseId
 }) => {
+  const { settings } = useSettings();
   const [clubs, setClubs] = useState([]);
   const [selectedTab, setSelectedTab] = useState('smart'); // 'smart' or 'all'
   const [distanceToPin, setDistanceToPin] = useState(null);
   const [recommendedClubs, setRecommendedClubs] = useState([]);
   const [holeHistory, setHoleHistory] = useState([]);
   const [mostUsedClub, setMostUsedClub] = useState(null);
+
+  // Helper function to format distance based on user's measurement preference
+  const formatDistance = (yards) => {
+    if (!yards) return '';
+    
+    if (settings.measurementSystem === 'metric') {
+      const meters = Math.round(yards * 0.9144);
+      return `${meters}m`;
+    } else {
+      return `${yards}y`;
+    }
+  };
+
+  // Helper function to get distance unit
+  const getDistanceUnit = () => {
+    return settings.measurementSystem === 'metric' ? 'meters' : 'yards';
+  };
 
   useEffect(() => {
     if (visible) {
@@ -58,7 +77,7 @@ const SmartClubSelector = ({
         currentPosition.longitude,
         pinPosition.latitude,
         pinPosition.longitude,
-        'yards'
+        'yards' // Keep internal calculations in yards for consistency
       );
       setDistanceToPin(Math.round(distance));
       
@@ -134,7 +153,7 @@ const SmartClubSelector = ({
         {/* Distance and recommendations header */}
         {distanceToPin && (
           <View style={styles.distanceHeader}>
-            <Text style={styles.distanceText}>{distanceToPin} yards to pin</Text>
+            <Text style={styles.distanceText}>{formatDistance(distanceToPin)} to pin</Text>
           </View>
         )}
 
@@ -152,7 +171,7 @@ const SmartClubSelector = ({
               </View>
               <View style={styles.clubCardStats}>
                 {mostUsedClub.avgDistance && (
-                  <Text style={styles.clubCardDistance}>{mostUsedClub.avgDistance}y</Text>
+                  <Text style={styles.clubCardDistance}>{formatDistance(mostUsedClub.avgDistance)}</Text>
                 )}
                 <Text style={styles.favoriteLabel}>★ Most Used</Text>
               </View>
@@ -178,7 +197,7 @@ const SmartClubSelector = ({
                   <Text style={styles.clubCardBrand}>{rec.club.brand}</Text>
                 </View>
                 <View style={styles.clubCardStats}>
-                  <Text style={styles.clubCardDistance}>{rec.club.avgDistance}y</Text>
+                  <Text style={styles.clubCardDistance}>{formatDistance(rec.club.avgDistance)}</Text>
                   {rec.difference < 5 && (
                     <Text style={styles.perfectMatch}>Perfect!</Text>
                   )}
@@ -210,7 +229,7 @@ const SmartClubSelector = ({
                   onPress={() => handleClubSelect(club)}
                 >
                   <Text style={styles.quickClubName}>{club.getShortName()}</Text>
-                  <Text style={styles.quickClubDistance}>{club.avgDistance}y</Text>
+                  <Text style={styles.quickClubDistance}>{formatDistance(club.avgDistance)}</Text>
                 </TouchableOpacity>
               ))}
           </View>
@@ -245,7 +264,7 @@ const SmartClubSelector = ({
                     )}
                   </View>
                   {club.avgDistance && (
-                    <Text style={styles.clubListDistance}>{club.avgDistance}y</Text>
+                    <Text style={styles.clubListDistance}>{formatDistance(club.avgDistance)}</Text>
                   )}
                 </TouchableOpacity>
               ))}
