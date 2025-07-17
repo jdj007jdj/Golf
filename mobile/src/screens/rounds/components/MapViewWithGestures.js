@@ -18,7 +18,6 @@ import TileImage from '../../../components/TileImage';
 import persistentTileCache from '../../../utils/persistentTileCache';
 import shotTrackingService from '../../../services/shotTrackingService';
 import ShotOverlay from './ShotOverlay';
-import DistanceDisplay from '../../../components/DistanceDisplay';
 import { calculateDistance, formatDistance } from '../../../utils/gpsCalculations';
 
 // Set access token to null (MapLibre doesn't require it)
@@ -51,7 +50,7 @@ const CourseMapView = React.memo(({
   const [shots, setShots] = useState([]);
   const [showShots, setShowShots] = useState(true);
   const [mapBounds, setMapBounds] = useState(null);
-  const [showDistances, setShowDistances] = useState(true);
+  const [currentDistances, setCurrentDistances] = useState(null);
   
   // Debug state changes and update ref
   useEffect(() => {
@@ -269,6 +268,24 @@ const CourseMapView = React.memo(({
     return () => clearInterval(shotInterval);
   }, [round?.id, currentHole]);
 
+  // Update distances periodically
+  useEffect(() => {
+    const updateDistances = async () => {
+      try {
+        const distances = await shotTrackingService.getCurrentDistances(currentHole);
+        setCurrentDistances(distances);
+      } catch (error) {
+        console.error('Error updating distances:', error);
+      }
+    };
+
+    // Update immediately and then every 5 seconds
+    updateDistances();
+    const interval = setInterval(updateDistances, 5000);
+    
+    return () => clearInterval(interval);
+  }, [currentHole]);
+
   // Initialize and request permissions
   useEffect(() => {
     let mounted = true;
@@ -462,6 +479,25 @@ const CourseMapView = React.memo(({
         isPanningRef.current = false;
       }, 1500);
     }
+  };
+
+  // Helper function to format distance display
+  const formatDistanceDisplay = (distance, confidence, type) => {
+    if (!distance) return 'No data';
+    
+    const unit = settings?.measurementSystem === 'metric' ? 'm' : 'y';
+    const roundedDistance = Math.round(distance);
+    
+    let confidenceText = '';
+    if (confidence >= 0.8) {
+      confidenceText = ''; // High confidence - no indicator needed
+    } else if (confidence >= 0.5) {
+      confidenceText = ' ~'; // Medium confidence - approximate
+    } else {
+      confidenceText = ' ?'; // Low confidence - uncertain
+    }
+    
+    return `${roundedDistance}${unit}${confidenceText}`;
   };
   
   // Handle zoom changes from map
@@ -696,7 +732,15 @@ const CourseMapView = React.memo(({
       <View style={styles.distanceBar} pointerEvents="box-none">
         <View style={styles.distanceItem}>
           <Text style={styles.distanceLabel}>Pin</Text>
-          <Text style={styles.distanceValue}>Coming Soon</Text>
+          <Text style={[
+            styles.distanceValue,
+            currentDistances?.pin ? styles.distanceValueActive : null
+          ]}>
+            {currentDistances?.pin 
+              ? formatDistanceDisplay(currentDistances.pin.distance, currentDistances.pin.confidence, currentDistances.pin.type)
+              : 'Learning...'
+            }
+          </Text>
         </View>
         <View style={styles.distanceItem}>
           <Text style={styles.distanceLabel}>Front</Text>
@@ -753,27 +797,6 @@ const CourseMapView = React.memo(({
         </TouchableOpacity>
       )}
 
-      {/* Distance Display */}
-      <DistanceDisplay
-        currentHole={currentHole}
-        isVisible={showDistances}
-        settings={settings}
-        onDistancePress={(distances) => {
-          console.log('📏 Distance pressed:', distances);
-          // Could show more details or toggle GPS accuracy
-        }}
-      />
-
-      {/* Distance toggle button */}
-      <TouchableOpacity
-        style={styles.distanceToggleButton}
-        onPress={() => {
-          console.log(`Distance toggle pressed, changing from ${showDistances} to ${!showDistances}`);
-          setShowDistances(!showDistances);
-        }}
-      >
-        <Text style={styles.distanceToggleButtonText}>{showDistances ? '📏' : '📐'}</Text>
-      </TouchableOpacity>
 
       {/* Zoom Controls */}
       <View style={styles.zoomControls}>
@@ -965,6 +988,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#999',
   },
+  distanceValueActive: {
+    color: '#4CAF50',
+  },
   attribution: {
     position: 'absolute',
     bottom: 10,
@@ -1031,26 +1057,6 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   shotToggleButtonText: {
-    fontSize: 20,
-  },
-  distanceToggleButton: {
-    position: 'absolute',
-    bottom: 110,
-    right: 110,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 3,
-  },
-  distanceToggleButtonText: {
     fontSize: 20,
   },
   zoomControls: {
