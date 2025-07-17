@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { API_CONFIG } from '../../config/api';
+import persistentTileCache from '../../utils/persistentTileCache';
 
 const SettingsScreen = ({ navigation }) => {
   const { user, logout, token } = useAuth();
@@ -46,6 +47,11 @@ const SettingsScreen = ({ navigation }) => {
   const [theme, setTheme] = useState(settings.theme);
   const [notificationsEnabled, setNotificationsEnabled] = useState(settings.notificationsEnabled);
   const [handicap, setHandicap] = useState(settings.handicap?.toString() || '');
+  
+  // Map Cache Settings
+  const [cacheEnabled, setCacheEnabled] = useState(true);
+  const [cacheLimit, setCacheLimit] = useState(100); // MB
+  const [cacheStats, setCacheStats] = useState(null);
 
   useEffect(() => {
     loadSettings();
@@ -60,10 +66,28 @@ const SettingsScreen = ({ navigation }) => {
         setLastName(user.lastName || '');
         setEmail(user.email || '');
       }
+      
+      // Load cache settings
+      await loadCacheSettings();
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const loadCacheSettings = async () => {
+    try {
+      // Get current cache settings
+      const cacheSettings = persistentTileCache.settings;
+      setCacheEnabled(cacheSettings.enabled);
+      setCacheLimit(cacheSettings.storageLimit / 1024 / 1024); // Convert to MB
+      
+      // Get cache stats
+      const stats = persistentTileCache.getStats();
+      setCacheStats(stats);
+    } catch (error) {
+      console.error('Error loading cache settings:', error);
     }
   };
 
@@ -95,6 +119,12 @@ const SettingsScreen = ({ navigation }) => {
       const success = await updateSettings(newSettings);
       
       if (success) {
+        // Save cache settings
+        await persistentTileCache.saveSettings({
+          enabled: cacheEnabled,
+          storageLimit: cacheLimit * 1024 * 1024, // Convert MB to bytes
+        });
+        
         // Update user profile if changed
         if (token && (firstName !== user?.firstName || lastName !== user?.lastName || handicap)) {
           try {
@@ -137,6 +167,42 @@ const SettingsScreen = ({ navigation }) => {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleClearCache = () => {
+    Alert.alert(
+      'Clear Map Cache',
+      'This will delete all offline map tiles. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Cache',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              persistentTileCache.clearAll();
+              await loadCacheSettings(); // Reload stats
+              Alert.alert('Success', 'Map cache cleared successfully');
+            } catch (error) {
+              console.error('Error clearing cache:', error);
+              Alert.alert('Error', 'Failed to clear cache');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCacheLimitChange = (value) => {
+    setCacheLimit(value);
+  };
+
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   };
 
   const handleLogout = () => {
@@ -301,6 +367,68 @@ const SettingsScreen = ({ navigation }) => {
           <View style={styles.themeInfo}>
             <Text style={styles.themeText}>Dark mode will be available in a future update</Text>
           </View>
+        </View>
+
+        {/* Map Cache Section */}
+        {renderSectionHeader('Map Cache')}
+        <View style={styles.section}>
+          {renderSwitch('Enable Offline Maps', cacheEnabled, setCacheEnabled, 'Store map tiles for offline use')}
+          
+          {cacheEnabled && (
+            <>
+              <Text style={styles.subsectionTitle}>Storage Limit</Text>
+              <View style={styles.cacheLimitContainer}>
+                {[50, 100, 200, 500, 1000].map((limit) => (
+                  <TouchableOpacity
+                    key={limit}
+                    style={[
+                      styles.cacheLimitButton,
+                      cacheLimit === limit && styles.cacheLimitActive
+                    ]}
+                    onPress={() => handleCacheLimitChange(limit)}
+                  >
+                    <Text style={[
+                      styles.cacheLimitText,
+                      cacheLimit === limit && styles.cacheLimitTextActive
+                    ]}>
+                      {limit >= 1000 ? `${limit/1000}GB` : `${limit}MB`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              {cacheStats && (
+                <View style={styles.cacheStatsContainer}>
+                  <Text style={styles.cacheStatsTitle}>Cache Usage</Text>
+                  <View style={styles.cacheStatRow}>
+                    <Text style={styles.cacheStatLabel}>Memory Cache:</Text>
+                    <Text style={styles.cacheStatValue}>
+                      {cacheStats.memoryCache.size}/{cacheStats.memoryCache.maxSize} tiles
+                    </Text>
+                  </View>
+                  <View style={styles.cacheStatRow}>
+                    <Text style={styles.cacheStatLabel}>Disk Cache:</Text>
+                    <Text style={styles.cacheStatValue}>
+                      {cacheStats.persistentCache.tileCount} tiles ({formatBytes(cacheStats.persistentCache.totalSize)})
+                    </Text>
+                  </View>
+                  <View style={styles.cacheStatRow}>
+                    <Text style={styles.cacheStatLabel}>Storage Used:</Text>
+                    <Text style={styles.cacheStatValue}>
+                      {formatBytes(cacheStats.persistentCache.totalSize)} / {cacheLimit}MB
+                    </Text>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    style={styles.clearCacheButton} 
+                    onPress={handleClearCache}
+                  >
+                    <Text style={styles.clearCacheText}>Clear Cache</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          )}
         </View>
 
         {/* Account Section */}
@@ -502,6 +630,75 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 40,
+  },
+  cacheLimitContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10,
+    marginHorizontal: -5,
+  },
+  cacheLimitButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginHorizontal: 5,
+    marginBottom: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#FFF',
+  },
+  cacheLimitActive: {
+    backgroundColor: '#2E7D32',
+    borderColor: '#2E7D32',
+  },
+  cacheLimitText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  cacheLimitTextActive: {
+    color: '#FFF',
+    fontWeight: '500',
+  },
+  cacheStatsContainer: {
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+  },
+  cacheStatsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 10,
+  },
+  cacheStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  cacheStatLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  cacheStatValue: {
+    fontSize: 14,
+    color: '#1A1A1A',
+    fontWeight: '500',
+  },
+  clearCacheButton: {
+    marginTop: 15,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FF5252',
+    alignItems: 'center',
+  },
+  clearCacheText: {
+    fontSize: 16,
+    color: '#FF5252',
+    fontWeight: '500',
   },
 });
 

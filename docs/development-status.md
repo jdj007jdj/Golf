@@ -15,7 +15,7 @@
 |-------|--------|----------|------------|
 | Phase 0: Foundation | ✅ Complete | Weeks 1-2 | 100% + Enhanced |
 | Phase 1: Basic Scorecard | 🔄 In Progress | Weeks 3-5 | 70% (Architecture + Screens) |
-| Phase 2: GPS Integration | ⏳ Ready | Weeks 6-9 | Architecture Ready |
+| Phase 2: GPS Integration | 🔄 In Progress | Weeks 6-9 | 40% (Maps + Cache Working) |
 | Phase 3: Multi-User Sync | ✅ Complete | Weeks 10-12 | 100% (Implemented Early) |
 | Phase 4+: Advanced Features | ⏳ Ready | Future | Architecture Ready |
 
@@ -60,6 +60,33 @@
 - [ ] **Round Management**: Start/pause/complete round workflows
 - [ ] **Score Entry**: Touch-optimized score input with validation
 - [ ] **Round Summary**: Post-round statistics and sharing
+
+### Phase 2: GPS Integration (40% Complete)
+
+#### 🗺️ Map Implementation (January 2025)
+- [x] **MapLibre Integration**: React Native 0.76.5 compatible solution
+- [x] **Custom Gesture Handling**: Smooth pan/zoom with PanResponder
+- [x] **Persistent Tile Cache**: Three-tier caching system (Memory → SQLite → Network)
+- [x] **Offline Maps**: Previously viewed areas work without internet
+- [x] **MapTiler Satellite**: High-quality satellite imagery
+- [x] **Tab Navigation**: Seamless switch between Scorecard and Map views
+
+#### 📦 Cache System Features
+- [x] **SQLite Storage**: react-native-nitro-sqlite for persistent tiles
+- [x] **Memory Cache**: LRU cache with 50 tile limit
+- [x] **Smart Eviction**: Based on access patterns and storage limits
+- [x] **Background Prefetch**: Adjacent tiles loaded automatically
+- [x] **Cache Statistics**: Real-time tracking of hits/misses
+- [x] **Storage Management**: 100MB default limit with automatic cleanup
+
+#### ⏳ GPS Features Pending (see /GolfOnMap.md for detailed plan)
+- [ ] **Shot Tracking System**: Log GPS coordinates with each score increment
+- [ ] **Distance Calculations**: Real-time distance to pin, shot distances
+- [ ] **Club Analytics**: Build distance profiles for each club
+- [ ] **Visual Shot Paths**: Display shots on map with distances
+- [ ] **Course Learning**: Detect tee boxes and pins from player data
+- [ ] **Hole Detection**: Automatic hole switching based on location
+- [ ] **Course Download**: Bulk tile download for entire course
 
 ---
 
@@ -122,6 +149,8 @@
 | Real-time | Socket.io-client | 4.8.1 | ✅ Production |
 | Navigation | React Navigation | 7.x | ✅ Production |
 | Storage | AsyncStorage + Keychain | Latest | ✅ Production |
+| Maps | @maplibre/maplibre-react-native | 10.2.0 | ✅ Production |
+| Tiles | MapTiler Satellite API | - | ✅ Production |
 
 ### Backend Services
 | Component | Technology | Status |

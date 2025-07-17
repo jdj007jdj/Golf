@@ -4,7 +4,7 @@
 // - For Android Emulator: use '10.0.2.2'
 // - For Physical Device: use your computer's IP address (run 'ipconfig' on Windows)
 // - Common local IPs: 192.168.1.x or 192.168.0.x
-const API_HOST = '192.168.0.142'; // Your Windows IP - updated 2025-01-16
+const API_HOST = '192.168.100.133'; // Your Windows IP - updated 2025-01-17
 
 export const API_CONFIG = {
   BASE_URL: `http://${API_HOST}:3000`,

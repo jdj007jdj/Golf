@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Image, View, ActivityIndicator, StyleSheet } from 'react-native';
-import tileCache from '../utils/tileCache';
+import persistentTileCache from '../utils/persistentTileCache';
 
 const TileImage = ({ tile, style, onLoad, onError }) => {
   const [imageData, setImageData] = useState(null);
@@ -15,9 +15,10 @@ const TileImage = ({ tile, style, onLoad, onError }) => {
         setLoading(true);
         setError(false);
         
-        // Check cache first
-        const cachedData = tileCache.get(tile.key);
+        // Check cache first (memory + persistent)
+        const cachedData = persistentTileCache.get(tile.key);
         if (cachedData) {
+          console.log(`🎯 TileImage: Cache hit for ${tile.key}`);
           if (mounted) {
             setImageData(cachedData);
             setLoading(false);
@@ -25,6 +26,7 @@ const TileImage = ({ tile, style, onLoad, onError }) => {
           }
           return;
         }
+        console.log(`🔍 TileImage: Cache miss for ${tile.key}, fetching...`);
         
         // Use fetch to bypass bridgeless mode HTTP issues
         const response = await fetch(tile.url);
@@ -40,8 +42,11 @@ const TileImage = ({ tile, style, onLoad, onError }) => {
         reader.onloadend = () => {
           if (mounted) {
             const dataUri = reader.result;
-            // Cache the result
-            tileCache.set(tile.key, dataUri);
+            // Cache the result (memory + persistent)
+            // Extract zoom from tile key (format: "zoom-x-y")
+            const zoom = parseInt(tile.key.split('-')[0], 10);
+            console.log(`📥 TileImage: Storing tile ${tile.key} to cache (zoom: ${zoom})`);
+            persistentTileCache.set(tile.key, dataUri, zoom);
             setImageData(dataUri);
             setLoading(false);
             if (onLoad) onLoad();

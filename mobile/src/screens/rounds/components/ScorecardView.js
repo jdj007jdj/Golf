@@ -11,6 +11,7 @@ import {
   Modal,
   Switch,
 } from 'react-native';
+import shotTrackingService from '../../../services/shotTrackingService';
 
 const { width } = Dimensions.get('window');
 
@@ -41,6 +42,14 @@ const ScorecardView = ({
 }) => {
   const [scoreAnimation] = useState(new Animated.Value(1));
   const [statisticsCardExpanded, setStatisticsCardExpanded] = useState(true);
+  const [isShotTrackingEnabled, setIsShotTrackingEnabled] = useState(true);
+
+  // Initialize shot tracking service
+  useEffect(() => {
+    if (round?.id) {
+      shotTrackingService.initialize(round.id);
+    }
+  }, [round?.id]);
 
   // Calculate totals
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
@@ -57,7 +66,7 @@ const ScorecardView = ({
   const currentHoleHistorical = historicalData?.[currentHole] || null;
 
   // Handle score change
-  const handleScoreChange = (holeNumber, change) => {
+  const handleScoreChange = async (holeNumber, change) => {
     const newScore = Math.max(0, Math.min(15, (scores[holeNumber] || 0) + change));
     
     // Animate score change
@@ -78,6 +87,26 @@ const ScorecardView = ({
       ...prev,
       [holeNumber]: newScore
     }));
+
+    // Log shot with GPS if score increased (shot was taken)
+    if (isShotTrackingEnabled && change > 0 && newScore > 0) {
+      try {
+        const shotNumber = newScore; // Shot number equals the score
+        const clubId = clubs[`${holeNumber}-${shotNumber}`] || null;
+        
+        await shotTrackingService.logShot(
+          holeNumber,
+          shotNumber,
+          newScore,
+          clubId
+        );
+        
+        console.log(`Shot tracked: Hole ${holeNumber}, Shot ${shotNumber}`);
+      } catch (error) {
+        console.error('Failed to track shot:', error);
+        // Don't show error to user - shot tracking is optional
+      }
+    }
   };
 
   // Handle putts change
@@ -145,6 +174,24 @@ const ScorecardView = ({
 
   return (
     <View style={styles.container}>
+      {/* GPS Tracking Indicator */}
+      <View style={styles.gpsTrackingContainer}>
+        <View style={styles.gpsTrackingRow}>
+          <Text style={styles.gpsTrackingLabel}>GPS Shot Tracking</Text>
+          <Switch
+            value={isShotTrackingEnabled}
+            onValueChange={setIsShotTrackingEnabled}
+            trackColor={{ false: '#E0E0E0', true: '#81C784' }}
+            thumbColor={isShotTrackingEnabled ? '#2E7D32' : '#f4f3f4'}
+          />
+        </View>
+        {isShotTrackingEnabled && (
+          <Text style={styles.gpsTrackingHint}>
+            GPS coordinates will be logged with each shot
+          </Text>
+        )}
+      </View>
+
       {/* Score Summary */}
       {settings.scorecard?.showScoreSummary !== false && (
         <View style={styles.scoreSummary}>
@@ -350,6 +397,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  gpsTrackingContainer: {
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  gpsTrackingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  gpsTrackingLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  gpsTrackingHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
+    fontStyle: 'italic',
   },
   scoreSummary: {
     flexDirection: 'row',

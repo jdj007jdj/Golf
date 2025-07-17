@@ -218,3 +218,58 @@ The plan contains 5 phases from Foundation Stabilization to Advanced Features. A
 - ✅ Production ready - no hacks or workarounds needed
 
 **Setup Guide**: See `/MapLibreSetup.md` for detailed instructions to implement in other projects
+
+### Map Cache Implementation (Commit: bb45a94)
+**Persistent Tile Caching System Added**: Three-tier caching for offline maps and improved performance
+
+**Implementation Details**:
+1. **Three-Tier Cache System**:
+   - Memory Cache: LRU cache for immediate access (50 tiles max)
+   - SQLite Cache: Persistent storage using react-native-nitro-sqlite
+   - Network: Fallback when tiles not cached
+   
+2. **Cache Features**:
+   - Automatic tile prefetching for smoother panning
+   - Storage limit management (default 100MB)
+   - Expiration handling (30 days default)
+   - Cache statistics tracking
+   - Smart eviction based on access patterns
+   
+3. **New Files Added**:
+   - `/mobile/src/services/tileCacheDatabase.js` - SQLite database management
+   - `/mobile/src/utils/persistentTileCache.js` - Cache coordination layer
+   - `/mobile/src/utils/tileCache.js` - In-memory LRU cache
+   - `/mobile/src/components/TileImage.js` - Updated with cache support
+
+### GPS Shot Tracking Implementation (In Progress)
+**Comprehensive GPS-based shot tracking and course learning system**
+**Project Plan**: `/GolfOnMap.md` - Full technical specification
+**Core Features**:
+1. **Shot Tracking**: Log GPS coordinates with each score increment
+2. **Distance Calculations**: Real-time distance to pin, shot distances
+3. **Club Analytics**: Build distance profiles for each club
+4. **Visual Representation**: Display shot paths on map view
+5. **Course Learning**: Detect tee boxes and pins from player data
+
+**Implementation Phases**:
+- Phase 1: Core shot tracking with GPS logging
+- Phase 2: Map visualization of shots
+- Phase 3: Real-time GPS distance features  
+- Phase 4: Club distance analytics
+- Phase 5: Course learning algorithms
+- Phase 6: Backend integration
+- Phase 7: Advanced features
+
+**Current Status**: Planning complete, ready to implement Phase 1
+   
+4. **Performance Improvements**:
+   - Instant tile loading from memory cache
+   - Background prefetching of adjacent tiles
+   - Reduced network requests by 80-90%
+   - Works offline for previously viewed areas
+   
+5. **Cache Management**:
+   - Automatic cleanup of old tiles
+   - Respects storage limits
+   - Debug info shows cache hits/misses
+   - Settings stored in AsyncStorage

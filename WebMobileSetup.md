@@ -5,6 +5,7 @@ This document provides a comprehensive guide to recreate the exact development e
 ## 🏗️ Architecture Overview
 
 ### Project Structure
+
 ```
 project-root/
 ├── backend/                    # Next.js API backend
@@ -23,6 +24,7 @@ project-root/
 ```
 
 ### Technology Stack
+
 - **Backend**: Next.js 15.1.6 + TypeScript + Prisma + PostgreSQL
 - **Mobile**: React Native 0.76.5 + Kotlin + Gradle 8.7
 - **Database**: PostgreSQL with Prisma ORM
@@ -33,6 +35,7 @@ project-root/
 ## 📱 Mobile Development Environment
 
 ### Critical Version Matrix (TESTED & VERIFIED)
+
 ```json
 {
   "react-native": "0.76.5",
@@ -52,9 +55,11 @@ project-root/
 ### 🚨 Critical Requirements for React Native 0.76.x
 
 #### 1. Kotlin Conversion (MANDATORY)
+
 React Native 0.76.x **requires** Kotlin for MainActivity and MainApplication due to merged native libraries architecture.
 
 **MainActivity.kt**:
+
 ```kotlin
 package com.minimalapp
 
@@ -65,13 +70,14 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 class MainActivity : ReactActivity() {
     override fun getMainComponentName(): String = "MinimalApp"
-    
+
     override fun createReactActivityDelegate(): ReactActivityDelegate =
         DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
 }
 ```
 
 **MainApplication.kt**:
+
 ```kotlin
 package com.minimalapp
 
@@ -117,6 +123,7 @@ class MainApplication : Application(), ReactApplication {
 #### 2. Gradle Configuration
 
 **android/build.gradle**:
+
 ```gradle
 buildscript {
     ext {
@@ -146,6 +153,7 @@ allprojects {
 ```
 
 **android/app/build.gradle**:
+
 ```gradle
 apply plugin: "com.android.application"
 apply plugin: "com.facebook.react"
@@ -154,11 +162,11 @@ apply plugin: "kotlin-android"
 android {
     namespace "com.minimalapp"
     compileSdkVersion rootProject.ext.compileSdkVersion
-    
+
     buildFeatures {
         buildConfig true
     }
-    
+
     defaultConfig {
         applicationId "com.minimalapp"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -166,12 +174,12 @@ android {
         buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
         buildConfigField "boolean", "IS_HERMES_ENABLED", (findProperty("react.enableHermes") ?: true).toString()
     }
-    
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
     }
-    
+
     kotlinOptions {
         jvmTarget = "21"
     }
@@ -180,7 +188,7 @@ android {
 dependencies {
     implementation "com.facebook.react:react-android:0.76.5"
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
-    
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
@@ -190,6 +198,7 @@ dependencies {
 ```
 
 **android/settings.gradle**:
+
 ```gradle
 pluginManagement {
     includeBuild("../node_modules/@react-native/gradle-plugin")
@@ -211,6 +220,7 @@ reactSettings {
 ```
 
 **gradle.properties**:
+
 ```properties
 org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m
 android.useAndroidX=true
@@ -222,17 +232,26 @@ android.enableJetifier=true
 ## 📦 Verified Native Modules (All 10 APKs Tested)
 
 ### Module Testing Results
+
 All modules successfully build and run with React Native 0.76.5 + Kotlin:
 
 ```json
 {
   "navigation": {
-    "modules": ["@react-navigation/native@^7.1.14", "@react-navigation/native-stack@^7.3.21", "react-native-screens@^4.11.1", "react-native-safe-area-context@^5.5.2"],
+    "modules": [
+      "@react-navigation/native@^7.1.14",
+      "@react-navigation/native-stack@^7.3.21",
+      "react-native-screens@^4.11.1",
+      "react-native-safe-area-context@^5.5.2"
+    ],
     "apk_size": "140MB",
     "status": "✅ VERIFIED"
   },
   "storage_network": {
-    "modules": ["@react-native-async-storage/async-storage@^2.2.0", "@react-native-community/netinfo@^11.4.1"],
+    "modules": [
+      "@react-native-async-storage/async-storage@^2.2.0",
+      "@react-native-community/netinfo@^11.4.1"
+    ],
     "apk_size": "140MB",
     "status": "✅ VERIFIED"
   },
@@ -272,7 +291,10 @@ All modules successfully build and run with React Native 0.76.5 + Kotlin:
     "status": "✅ VERIFIED (HIGH-RISK MODULE)"
   },
   "nitro_sqlite": {
-    "modules": ["react-native-nitro-sqlite@^9.1.10", "react-native-nitro-modules@^0.26.3"],
+    "modules": [
+      "react-native-nitro-sqlite@^9.1.10",
+      "react-native-nitro-modules@^0.26.3"
+    ],
     "apk_size": "167MB",
     "status": "✅ VERIFIED (HIGH-RISK MODULE)"
   }
@@ -280,6 +302,7 @@ All modules successfully build and run with React Native 0.76.5 + Kotlin:
 ```
 
 ### Complete package.json Dependencies
+
 ```json
 {
   "dependencies": {
@@ -329,6 +352,7 @@ All modules successfully build and run with React Native 0.76.5 + Kotlin:
 ## 🖥️ Backend Development Environment
 
 ### Technology Stack
+
 - **Framework**: Next.js 15.1.6 with App Router
 - **Language**: TypeScript 5.7.2
 - **Database**: PostgreSQL with Prisma ORM 6.2.1
@@ -336,6 +360,7 @@ All modules successfully build and run with React Native 0.76.5 + Kotlin:
 - **Authentication**: Prisma + bcrypt pattern ready
 
 ### Project Structure
+
 ```
 backend/
 ├── src/
@@ -366,6 +391,7 @@ backend/
 ### Core Configuration Files
 
 **package.json**:
+
 ```json
 {
   "name": "golf-backend",
@@ -407,24 +433,26 @@ backend/
 ```
 
 **next.config.js**:
+
 ```javascript
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverComponentsExternalPackages: ['@prisma/client']
+    serverComponentsExternalPackages: ["@prisma/client"],
   },
   typescript: {
-    ignoreBuildErrors: false
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: false
-  }
+    ignoreDuringBuilds: false,
+  },
 };
 
 module.exports = nextConfig;
 ```
 
 **prisma/schema.prisma**:
+
 ```prisma
 generator client {
   provider = "prisma-client-js"
@@ -442,10 +470,10 @@ model User {
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   rounds    Round[]
   courses   Course[]
-  
+
   @@map("users")
 }
 
@@ -457,12 +485,12 @@ model Course {
   holes       Int      @default(18)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
-  
+
   rounds Round[]
-  
+
   @@map("courses")
 }
 
@@ -473,19 +501,20 @@ model Round {
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   userId   String
   user     User   @relation(fields: [userId], references: [id])
   courseId String
   course   Course @relation(fields: [courseId], references: [id])
-  
+
   @@map("rounds")
 }
 ```
 
 **src/lib/database.ts**:
+
 ```typescript
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -493,7 +522,7 @@ const globalForPrisma = globalThis as unknown as {
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 ```
 
 ---
@@ -501,6 +530,7 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 ## 🚀 Setup Instructions
 
 ### Prerequisites
+
 - Node.js 22.x LTS
 - Java OpenJDK 21
 - Android SDK with API 35
@@ -596,17 +626,20 @@ ls -la app/build/outputs/apk/debug/
 ## 🔧 Troubleshooting Common Issues
 
 ### React Native 0.76.x Issues
+
 1. **Native library loading errors**: Convert to Kotlin, use `OpenSourceMergedSoMapping`
 2. **CompileSdk conflicts**: Update to compileSdkVersion 35
 3. **Gradle compatibility**: Use Gradle 8.7 + AGP 8.6.0
 4. **CLI compatibility**: Use react-native-cli 16.0.3 with Node.js 22.x
 
 ### Build Issues
+
 1. **Memory errors**: Set `org.gradle.jvmargs=-Xmx4096m`
 2. **NDK errors**: Verify NDK 27.1.12297006 installation
 3. **Maven issues**: Ensure Maven Central repository is configured
 
 ### Module-Specific Issues
+
 1. **react-native-maps**: Requires Google Play Services setup for full functionality
 2. **react-native-nitro-sqlite**: Requires `react-native-nitro-modules` dependency
 3. **react-native-permissions**: Configure permissions in AndroidManifest.xml
@@ -616,7 +649,9 @@ ls -la app/build/outputs/apk/debug/
 ## 📋 Development Workflow
 
 ### Incremental Module Testing
+
 Follow the proven 10-APK methodology:
+
 1. Start with navigation modules (1.apk)
 2. Add storage/network (2.apk)
 3. Add device info (3.apk)
@@ -629,12 +664,14 @@ Follow the proven 10-APK methodology:
 10. Add nitro-sqlite (10.apk)
 
 ### Testing Strategy
+
 - Build APK after each module addition
 - Test "HELLO WORLD N" display for verification
 - Monitor APK size progression (140MB → 167MB)
 - Verify no compilation errors before proceeding
 
 ### Production Preparation
+
 - All 10 modules verified and working
 - No blocking errors, only minor warnings
 - Ready for release build configuration
@@ -645,17 +682,20 @@ Follow the proven 10-APK methodology:
 ## 🎯 Key Success Factors
 
 ### Architecture Decisions
+
 1. **Kotlin Mandatory**: React Native 0.76.x requires Kotlin for proper native library loading
 2. **OpenSourceMergedSoMapping**: Critical for new architecture compatibility
 3. **Incremental Testing**: Prevents complex debugging scenarios
 4. **Version Lock**: Exact version compatibility matrix prevents conflicts
 
 ### Performance Optimizations
+
 1. **Gradle Memory**: 4GB allocation for large builds
 2. **Metro Configuration**: Optimized for React Native 0.76.x
 3. **Tree Shaking**: All modules properly configured for autolinking
 
 ### Production Readiness
+
 1. **Full Module Stack**: All historically problematic modules working
 2. **TypeScript Support**: Complete type safety across stack
 3. **Database Integration**: Production-ready Prisma + PostgreSQL setup
@@ -666,12 +706,14 @@ Follow the proven 10-APK methodology:
 ## 📝 Notes for Future Implementation
 
 ### When Using This Guide
+
 1. **Follow Version Matrix Exactly**: Deviation from tested versions may cause compatibility issues
 2. **Kotlin is Mandatory**: Do not attempt Java-based setup with RN 0.76.x
 3. **Test Incrementally**: Use the 10-APK methodology for module validation
 4. **Update Carefully**: When updating versions, test the entire stack
 
 ### Environment Variables
+
 ```bash
 # Backend (.env)
 DATABASE_URL="postgresql://username:password@localhost:5432/database"
@@ -684,6 +726,7 @@ ndk.dir=/path/to/Android/Sdk/ndk/27.1.12297006
 ```
 
 ### Deployment Considerations
+
 - Backend: Vercel/Railway/DigitalOcean ready
 - Mobile: Google Play Store ready (after production build setup)
 - Database: PostgreSQL production instance required
@@ -694,6 +737,7 @@ ndk.dir=/path/to/Android/Sdk/ndk/27.1.12297006
 ## 🏆 Verified Results
 
 This setup has been **fully tested and verified** with:
+
 - ✅ 10 complete APK builds
 - ✅ All modules functional on device
 - ✅ React Native 0.76.5 + Kotlin compatibility
@@ -705,6 +749,6 @@ This setup has been **fully tested and verified** with:
 
 ---
 
-*Last Updated: 2025-01-12*
-*Tested Environment: Linux WSL2, Node.js 22.16.0, React Native 0.76.5*
-*Status: Production Ready ✅*
+_Last Updated: 2025-01-12_
+_Tested Environment: Linux WSL2, Node.js 22.16.0, React Native 0.76.5_
+_Status: Production Ready ✅_

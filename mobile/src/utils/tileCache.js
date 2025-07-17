@@ -79,7 +79,6 @@ class TileCache {
     this.accessOrder = [];
     this.hitCount = 0;
     this.missCount = 0;
-    console.log('🧹 Tile cache cleared');
   }
 
   /**
@@ -104,7 +103,6 @@ class TileCache {
    */
   async preloadTiles(tiles, fetchTile) {
     const tilesToLoad = tiles.filter(tile => !this.has(tile.key));
-    console.log(`📥 Preloading ${tilesToLoad.length} tiles...`);
 
     const promises = tilesToLoad.map(async (tile) => {
       try {
@@ -118,7 +116,6 @@ class TileCache {
     });
 
     await Promise.all(promises);
-    console.log(`✅ Preloading complete`);
   }
 }
 

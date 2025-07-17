@@ -71,7 +71,6 @@ const ScorecardContainer = ({ route, navigation }) => {
   const [clubs, setClubs] = useState({});
   const [currentHole, setCurrentHole] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
   const [isSavingRound, setIsSavingRound] = useState(false);
   const [historicalData, setHistoricalData] = useState(null);
   const [clubData, setClubData] = useState(null);
@@ -211,9 +210,9 @@ const ScorecardContainer = ({ route, navigation }) => {
     }
   };
 
-  // Handle settings modal
+  // Handle settings navigation
   const handleSettings = () => {
-    setShowSettings(true);
+    navigation.navigate('Settings');
   };
 
   // Shared props for both tabs - memoized to prevent unnecessary re-renders
@@ -230,8 +229,6 @@ const ScorecardContainer = ({ route, navigation }) => {
     currentHole,
     setCurrentHole,
     isLoading,
-    showSettings,
-    setShowSettings,
     isSavingRound,
     setIsSavingRound,
     historicalData,
@@ -259,7 +256,6 @@ const ScorecardContainer = ({ route, navigation }) => {
     clubs,
     currentHole,
     isLoading,
-    showSettings,
     isSavingRound,
     historicalData,
     clubData,

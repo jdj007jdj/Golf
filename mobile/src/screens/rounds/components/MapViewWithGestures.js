@@ -15,7 +15,10 @@ import MapLibreGL from '@maplibre/maplibre-react-native';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { MAP_CONFIG } from '../../../config/mapConfig';
 import TileImage from '../../../components/TileImage';
-import tileCache from '../../../utils/tileCache';
+import persistentTileCache from '../../../utils/persistentTileCache';
+import shotTrackingService from '../../../services/shotTrackingService';
+import ShotOverlay from './ShotOverlay';
+import { calculateDistance, formatDistance } from '../../../utils/gpsCalculations';
 
 // Set access token to null (MapLibre doesn't require it)
 MapLibreGL.setAccessToken(null);
@@ -43,6 +46,10 @@ const CourseMapView = React.memo(({
     center: centerCoordinate || [-82.0206, 33.5031], 
     zoom: 18 
   });
+  const [cacheStats, setCacheStats] = useState(null);
+  const [shots, setShots] = useState([]);
+  const [showShots, setShowShots] = useState(true);
+  const [mapBounds, setMapBounds] = useState(null);
   
   // Debug state changes and update ref
   useEffect(() => {
@@ -206,21 +213,59 @@ const CourseMapView = React.memo(({
     })
   ).current;
 
-  // Log cache statistics periodically
+  // Initialize persistent cache and update stats periodically
   useEffect(() => {
-    const logCacheStats = () => {
-      const stats = tileCache.getStats();
-      console.log(`📊 Cache Stats: ${stats.size}/${stats.maxSize} tiles, Hit rate: ${(stats.hitRate * 100).toFixed(1)}% (${stats.hits} hits, ${stats.misses} misses)`);
+    let interval;
+    
+    const initCache = async () => {
+      await persistentTileCache.initialize();
+      
+      // Initial stats update
+      const stats = persistentTileCache.getStats();
+      setCacheStats(stats);
+      
+      if (__DEV__) {
+        console.log(`📊 Persistent cache initialized:`, {
+          memory: `${stats.memoryCache.size}/${stats.memoryCache.maxSize} tiles`,
+          persistent: `${stats.persistentCache.tileCount} tiles (${(stats.persistentCache.totalSize / 1024 / 1024).toFixed(1)}MB)`,
+          limit: `${(stats.settings.storageLimit / 1024 / 1024).toFixed(0)}MB`
+        });
+      }
+      
+      // Update stats every 10 seconds
+      interval = setInterval(() => {
+        const newStats = persistentTileCache.getStats();
+        setCacheStats(newStats);
+      }, 10000);
+    };
+    
+    initCache();
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, []);
+
+  // Load shots for current round
+  useEffect(() => {
+    const loadShots = () => {
+      if (round?.id) {
+        const allShots = shotTrackingService.getAllShots();
+        console.log('MapView loading shots:', allShots.length);
+        if (allShots.length > 0) {
+          console.log('First shot coordinates:', allShots[0].coordinates);
+        }
+        setShots(allShots);
+      }
     };
 
-    // Log stats every 30 seconds
-    const interval = setInterval(logCacheStats, 30000);
+    loadShots();
     
-    // Log initial stats
-    logCacheStats();
-
-    return () => clearInterval(interval);
-  }, []);
+    // Set up interval to refresh shots
+    const shotInterval = setInterval(loadShots, 2000); // Refresh every 2 seconds
+    
+    return () => clearInterval(shotInterval);
+  }, [round?.id, currentHole]);
 
   // Initialize and request permissions
   useEffect(() => {
@@ -260,6 +305,39 @@ const CourseMapView = React.memo(({
       mounted = false;
     };
   }, []);
+
+  // Calculate map bounds for shot overlay
+  const calculateMapBounds = useCallback((center, zoom) => {
+    if (!center || center.length !== 2) return null;
+    
+    const [lng, lat] = center;
+    const z = Math.floor(zoom);
+    
+    // Calculate the geographic bounds visible on screen
+    // Using Web Mercator projection formulas
+    const tileSize = 256;
+    const scale = Math.pow(2, zoom);
+    const worldSize = tileSize * scale;
+    
+    // Screen dimensions in world coordinates
+    const screenWidthInWorld = width / worldSize * 360;
+    const screenHeightInWorld = height / worldSize * 180;
+    
+    // Calculate bounds
+    const west = lng - screenWidthInWorld / 2;
+    const east = lng + screenWidthInWorld / 2;
+    
+    // Latitude calculation is more complex due to Mercator projection
+    const latRad = lat * Math.PI / 180;
+    const mercatorY = Math.log(Math.tan(latRad) + 1 / Math.cos(latRad));
+    const topMercatorY = mercatorY + (screenHeightInWorld / 180 * Math.PI);
+    const bottomMercatorY = mercatorY - (screenHeightInWorld / 180 * Math.PI);
+    
+    const north = Math.atan(Math.sinh(topMercatorY)) * 180 / Math.PI;
+    const south = Math.atan(Math.sinh(bottomMercatorY)) * 180 / Math.PI;
+    
+    return { north, south, east, west };
+  }, [width, height]);
 
   // Calculate tiles for current view
   const calculateTiles = useCallback((center, zoom) => {
@@ -331,7 +409,11 @@ const CourseMapView = React.memo(({
   const updateTiles = useCallback((center, zoom) => {
     const newTiles = calculateTiles(center, zoom);
     setTiles(newTiles);
-  }, [calculateTiles]);
+    
+    // Update map bounds for shot overlay
+    const bounds = calculateMapBounds(center, zoom);
+    setMapBounds(bounds);
+  }, [calculateTiles, calculateMapBounds]);
 
   // Map ready handler
   const onMapReady = useCallback(async () => {
@@ -485,6 +567,17 @@ const CourseMapView = React.memo(({
         ))}
       </Animated.View>
 
+      {/* Shot Overlay */}
+      {showShots && shots.length > 0 && mapBounds && (
+        <ShotOverlay
+          shots={shots}
+          mapBounds={mapBounds}
+          currentHole={currentHole}
+          settings={settings}
+          onShotPress={(shot) => console.log('Shot pressed:', shot)}
+        />
+      )}
+
       {/* MapLibre GL Map View */}
       <MapLibreGL.MapView
         ref={mapRef}
@@ -518,9 +611,9 @@ const CourseMapView = React.memo(({
 
         {/* Test Marker at Augusta National */}
         <MapLibreGL.PointAnnotation
-          id="augusta"
+          id="augusta-center"
           coordinate={[-82.0206, 33.5031]}
-          title="Augusta National"
+          title="Augusta Center"
         >
           <View style={styles.markerContainer}>
             <Text style={styles.markerText}>🏌️</Text>
@@ -607,7 +700,12 @@ const CourseMapView = React.memo(({
         <Text style={styles.debugText}>Center: [{basePosition.center?.[0]?.toFixed(4) || 'N/A'}, {basePosition.center?.[1]?.toFixed(4) || 'N/A'}]</Text>
         <Text style={styles.debugText}>Tiles: {tiles.length}</Text>
         <Text style={styles.debugText}>Zoom: {basePosition.zoom?.toFixed(1) || 'N/A'}</Text>
-        <Text style={styles.debugText}>Cache: {tileCache.getStats().size}/{tileCache.getStats().maxSize}</Text>
+        {cacheStats && (
+          <>
+            <Text style={styles.debugText}>Mem: {cacheStats.memoryCache.size}/{cacheStats.memoryCache.maxSize}</Text>
+            <Text style={styles.debugText}>Disk: {cacheStats.persistentCache.tileCount} ({(cacheStats.persistentCache.totalSize / 1024 / 1024).toFixed(1)}MB)</Text>
+          </>
+        )}
       </View>
       
       {/* User location button */}
@@ -621,6 +719,20 @@ const CourseMapView = React.memo(({
           }}
         >
           <Text style={styles.locationButtonText}>📍</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Shot visibility toggle */}
+      {shots.length > 0 && (
+        console.log(`Rendering shot toggle button, shots: ${shots.length}, showShots: ${showShots}`),
+        <TouchableOpacity
+          style={styles.shotToggleButton}
+          onPress={() => {
+            console.log(`Shot toggle pressed, changing from ${showShots} to ${!showShots}`);
+            setShowShots(!showShots);
+          }}
+        >
+          <Text style={styles.shotToggleButtonText}>{showShots ? '🎯' : '⚪'}</Text>
         </TouchableOpacity>
       )}
 
@@ -860,6 +972,26 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   locationButtonText: {
+    fontSize: 20,
+  },
+  shotToggleButton: {
+    position: 'absolute',
+    bottom: 110,
+    right: 60,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 3,
+  },
+  shotToggleButtonText: {
     fontSize: 20,
   },
   zoomControls: {

@@ -4,6 +4,12 @@
 
 The GPS & Maps feature will transform the Golf app into a powerful rangefinder and course navigation tool. Users will seamlessly switch between scoring and live course view, with offline satellite imagery and precise distance measurements.
 
+### ✅ IMPLEMENTATION STATUS: Map Cache Working (2025-01-16)
+- **Persistent tile caching implemented** - Three-tier cache system operational
+- **Offline maps working** - Previously viewed areas accessible without internet
+- **Smooth pan/zoom** - Custom gesture handling with buttery-smooth performance
+- **MapLibre integration complete** - Fully compatible with React Native 0.76.5
+
 ### Core Features
 - **Dual View System**: Seamless switching between Scorecard and Map views
 - **Offline Maps**: Download and store satellite imagery locally for each course
@@ -40,6 +46,17 @@ After evaluating options, **MapTiler** is recommended for the following reasons:
 - **AsyncStorage**: Map metadata and download status
 
 ### Storage Strategy
+
+#### Current Implementation (SQLite-based):
+- **Memory Cache**: LRU cache with 50 tile limit for instant access
+- **SQLite Database**: Persistent storage with automatic cleanup
+- **Cache Features**:
+  - 100MB default storage limit
+  - 30-day tile expiration
+  - Smart eviction based on access patterns
+  - Background prefetching of adjacent tiles
+
+#### Original Plan (File-based):
 ```
 /AppData/GolfApp/Maps/
   └── courses/
