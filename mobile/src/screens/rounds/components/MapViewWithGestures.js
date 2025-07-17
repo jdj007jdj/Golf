@@ -567,16 +567,31 @@ const CourseMapView = React.memo(({
         ))}
       </Animated.View>
 
-      {/* Shot Overlay */}
-      {showShots && shots.length > 0 && mapBounds && (
-        <ShotOverlay
-          shots={shots}
-          mapBounds={mapBounds}
-          currentHole={currentHole}
-          settings={settings}
-          onShotPress={(shot) => console.log('Shot pressed:', shot)}
-        />
-      )}
+      {/* Shot Overlay - animated with pan */}
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            transform: [
+              { translateX: pan.x },
+              { translateY: pan.y }
+            ],
+            zIndex: 5,
+            opacity: showShots && shots.length > 0 && mapBounds ? 1 : 0
+          }
+        ]}
+        pointerEvents="none"
+      >
+        {showShots && shots.length > 0 && mapBounds && (
+          <ShotOverlay
+            shots={shots}
+            mapBounds={mapBounds}
+            currentHole={currentHole}
+            settings={settings}
+            onShotPress={(shot) => console.log('Shot pressed:', shot)}
+          />
+        )}
+      </Animated.View>
 
       {/* MapLibre GL Map View */}
       <MapLibreGL.MapView

@@ -89,15 +89,12 @@ const ShotOverlay = ({
   };
 
   if (!mapBounds || holeShots.length === 0) {
-    console.log(`ShotOverlay not rendering: mapBounds=${!!mapBounds}, shots=${holeShots.length}`);
     return null;
   }
-  
-  console.log(`ShotOverlay rendering with ${holeShots.length} shots`);
 
   return (
-    <View style={[StyleSheet.absoluteFillObject, {zIndex: 10, elevation: 10}]} pointerEvents="none">
-      <Svg width={width} height={height} style={[StyleSheet.absoluteFillObject, {zIndex: 5}]}>
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Svg width={width} height={height} style={StyleSheet.absoluteFillObject}>
         {/* Draw shot path */}
         {shotPath && (
           <Path
@@ -288,4 +285,12 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ShotOverlay;
+export default React.memo(ShotOverlay, (prevProps, nextProps) => {
+  // Only re-render if these props actually change
+  return (
+    prevProps.shots === nextProps.shots &&
+    prevProps.mapBounds === nextProps.mapBounds &&
+    prevProps.currentHole === nextProps.currentHole &&
+    prevProps.settings === nextProps.settings
+  );
+});
