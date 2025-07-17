@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Geolocation from 'react-native-geolocation-service';
 import { Shot, ShotCollection } from '../models/Shot';
 import { calculateDistance, calculateShotDistances } from '../utils/gpsCalculations';
+import courseKnowledgeService from './courseKnowledgeService';
 
 const STORAGE_KEY_PREFIX = 'golf_shots_';
 const CURRENT_ROUND_KEY = 'current_round_shots';
@@ -14,15 +15,21 @@ class ShotTrackingService {
   constructor() {
     this.currentRoundShots = new ShotCollection();
     this.isInitialized = false;
+    this.courseId = null;
   }
 
   /**
    * Initialize the service and load existing shots
    */
-  async initialize(roundId) {
+  async initialize(roundId, courseId = null) {
     try {
       this.roundId = roundId;
-      console.log('Loading shots for round:', roundId);
+      this.courseId = courseId;
+      console.log('Loading shots for round:', roundId, 'course:', courseId);
+      
+      // Initialize course knowledge service
+      await courseKnowledgeService.initialize();
+      
       await this.loadShots();
       console.log('Loaded shots:', this.currentRoundShots.shots.length);
       
@@ -32,6 +39,12 @@ class ShotTrackingService {
         await this.addDemoShots();
       } else {
         console.log('Found existing shots, not adding demo shots');
+      }
+      
+      // Process existing shots through course knowledge if we have a course ID
+      if (this.courseId && this.currentRoundShots.shots.length > 0) {
+        console.log('Processing existing shots through course knowledge system');
+        await courseKnowledgeService.processRound(this.currentRoundShots.shots, this.courseId);
       }
       
       this.isInitialized = true;
@@ -172,6 +185,11 @@ class ShotTrackingService {
       this.currentRoundShots.addShot(shot);
       await this.saveShots();
       
+      // Process shot through course knowledge system
+      if (this.courseId) {
+        await courseKnowledgeService.processShot(shot, this.currentRoundShots.shots, this.courseId);
+      }
+      
       console.log(`Shot logged: Hole ${holeNumber}, Shot ${shotNumber}`);
       return shot;
     } catch (error) {
@@ -309,6 +327,153 @@ class ShotTrackingService {
     }
     
     return null;
+  }
+
+  /**
+   * Get distance to pin using learned course data
+   */
+  async getDistanceToPin(holeNumber, latitude, longitude) {
+    if (!this.courseId) {
+      return null;
+    }
+
+    return await courseKnowledgeService.getDistanceToPin(
+      this.courseId,
+      holeNumber,
+      latitude,
+      longitude
+    );
+  }
+
+  /**
+   * Get distance to nearest tee box
+   */
+  async getDistanceToTee(holeNumber, latitude, longitude) {
+    if (!this.courseId) {
+      return null;
+    }
+
+    try {
+      const teeBoxes = await courseKnowledgeService.getTeeBoxes(this.courseId, holeNumber);
+      
+      if (teeBoxes.length === 0) {
+        return null;
+      }
+
+      // Find nearest tee box
+      let nearestTee = null;
+      let minDistance = Infinity;
+
+      teeBoxes.forEach(teeBox => {
+        const distance = calculateDistance(
+          latitude,
+          longitude,
+          teeBox.coordinates.latitude,
+          teeBox.coordinates.longitude,
+          'yards'
+        );
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestTee = {
+            distance: Math.round(distance),
+            teeBox,
+            confidence: teeBox.confidence
+          };
+        }
+      });
+
+      return nearestTee;
+    } catch (error) {
+      console.error('Error getting distance to tee:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get green boundary information
+   */
+  async getGreenInfo(holeNumber) {
+    if (!this.courseId) {
+      return null;
+    }
+
+    try {
+      const green = await courseKnowledgeService.getGreenBoundary(this.courseId, holeNumber);
+      return green;
+    } catch (error) {
+      console.error('Error getting green info:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get course learning summary
+   */
+  async getCourseLearningProgress() {
+    if (!this.courseId) {
+      return null;
+    }
+
+    try {
+      const summary = await courseKnowledgeService.getCourseSummary(this.courseId);
+      return summary;
+    } catch (error) {
+      console.error('Error getting course learning progress:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get real-time distances for current position
+   */
+  async getCurrentDistances(holeNumber) {
+    try {
+      const coordinates = await this.getCurrentPosition();
+      
+      const distances = {
+        timestamp: coordinates.timestamp,
+        accuracy: coordinates.accuracy,
+        pin: null,
+        tee: null,
+        green: null
+      };
+
+      // Get distance to pin
+      const pinDistance = await this.getDistanceToPin(
+        holeNumber,
+        coordinates.latitude,
+        coordinates.longitude
+      );
+      if (pinDistance) {
+        distances.pin = pinDistance;
+      }
+
+      // Get distance to nearest tee
+      const teeDistance = await this.getDistanceToTee(
+        holeNumber,
+        coordinates.latitude,
+        coordinates.longitude
+      );
+      if (teeDistance) {
+        distances.tee = teeDistance;
+      }
+
+      // Get green info
+      const greenInfo = await this.getGreenInfo(holeNumber);
+      if (greenInfo) {
+        distances.green = {
+          confidence: greenInfo.confidence,
+          area: greenInfo.area,
+          samples: greenInfo.samples
+        };
+      }
+
+      return distances;
+    } catch (error) {
+      console.error('Error getting current distances:', error);
+      return null;
+    }
   }
 
   /**

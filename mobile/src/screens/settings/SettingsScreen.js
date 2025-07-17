@@ -52,6 +52,7 @@ const SettingsScreen = ({ navigation }) => {
   const [cacheEnabled, setCacheEnabled] = useState(true);
   const [cacheLimit, setCacheLimit] = useState(100); // MB
   const [cacheStats, setCacheStats] = useState(null);
+  
 
   useEffect(() => {
     loadSettings();
@@ -441,6 +442,7 @@ const SettingsScreen = ({ navigation }) => {
         
         <View style={styles.bottomPadding} />
       </ScrollView>
+      
     </View>
   );
 };

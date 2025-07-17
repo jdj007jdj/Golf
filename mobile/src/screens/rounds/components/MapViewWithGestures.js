@@ -18,6 +18,7 @@ import TileImage from '../../../components/TileImage';
 import persistentTileCache from '../../../utils/persistentTileCache';
 import shotTrackingService from '../../../services/shotTrackingService';
 import ShotOverlay from './ShotOverlay';
+import DistanceDisplay from '../../../components/DistanceDisplay';
 import { calculateDistance, formatDistance } from '../../../utils/gpsCalculations';
 
 // Set access token to null (MapLibre doesn't require it)
@@ -50,6 +51,7 @@ const CourseMapView = React.memo(({
   const [shots, setShots] = useState([]);
   const [showShots, setShowShots] = useState(true);
   const [mapBounds, setMapBounds] = useState(null);
+  const [showDistances, setShowDistances] = useState(true);
   
   // Debug state changes and update ref
   useEffect(() => {
@@ -751,6 +753,28 @@ const CourseMapView = React.memo(({
         </TouchableOpacity>
       )}
 
+      {/* Distance Display */}
+      <DistanceDisplay
+        currentHole={currentHole}
+        isVisible={showDistances}
+        settings={settings}
+        onDistancePress={(distances) => {
+          console.log('📏 Distance pressed:', distances);
+          // Could show more details or toggle GPS accuracy
+        }}
+      />
+
+      {/* Distance toggle button */}
+      <TouchableOpacity
+        style={styles.distanceToggleButton}
+        onPress={() => {
+          console.log(`Distance toggle pressed, changing from ${showDistances} to ${!showDistances}`);
+          setShowDistances(!showDistances);
+        }}
+      >
+        <Text style={styles.distanceToggleButtonText}>{showDistances ? '📏' : '📐'}</Text>
+      </TouchableOpacity>
+
       {/* Zoom Controls */}
       <View style={styles.zoomControls}>
         <TouchableOpacity
@@ -1007,6 +1031,26 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   shotToggleButtonText: {
+    fontSize: 20,
+  },
+  distanceToggleButton: {
+    position: 'absolute',
+    bottom: 110,
+    right: 110,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 3,
+  },
+  distanceToggleButtonText: {
     fontSize: 20,
   },
   zoomControls: {

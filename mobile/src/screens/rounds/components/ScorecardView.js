@@ -47,9 +47,9 @@ const ScorecardView = ({
   // Initialize shot tracking service
   useEffect(() => {
     if (round?.id) {
-      shotTrackingService.initialize(round.id);
+      shotTrackingService.initialize(round.id, course?.id);
     }
-  }, [round?.id]);
+  }, [round?.id, course?.id]);
 
   // Calculate totals
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
