@@ -35,7 +35,6 @@ model User {
   roundParticipants    RoundParticipant[]
   createdCourses       Course[] @relation("CourseCreator")
   holeScores           HoleScore[]
-  shots                Shot[]
   syncQueue            SyncQueue[]
   resolvedConflicts    SyncConflict[]
   createdFeatures      CourseFeature[] @relation("FeatureCreator")
@@ -284,7 +283,6 @@ model Shot {
   roundParticipant RoundParticipant @relation("ParticipantShots", fields: [roundParticipantId], references: [id], onDelete: Cascade)
   hole             Hole             @relation(fields: [holeId], references: [id])
   club             UserClub?        @relation(fields: [clubId], references: [id])
-  user             User             @relation(fields: [roundParticipantId], references: [id], map: "shots_user_fkey")
 
   @@map("shots")
 }

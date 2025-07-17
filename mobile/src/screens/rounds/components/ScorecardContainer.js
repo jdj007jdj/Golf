@@ -77,7 +77,7 @@ const ScorecardContainer = ({ route, navigation }) => {
   const [showAchievements, setShowAchievements] = useState(false);
   const [currentAchievements, setCurrentAchievements] = useState([]);
   const [courseStats, setCourseStats] = useState(null);
-  const [showClubModal, setShowClubModal] = useState(false);
+  // showClubModal removed - using SmartClubSelector now
   const [expandedCategories, setExpandedCategories] = useState({});
   
   // Storage key for this specific round
@@ -90,25 +90,7 @@ const ScorecardContainer = ({ route, navigation }) => {
     par: i + 1 <= 4 ? 4 : i + 1 <= 10 ? (i + 1) % 2 === 0 ? 5 : 3 : 4, // Mixed pars
   }));
 
-  // Club selection options
-  const CLUB_OPTIONS = [
-    { id: 'driver', name: 'Driver', category: 'woods' },
-    { id: '3wood', name: '3 Wood', category: 'woods' },
-    { id: '5wood', name: '5 Wood', category: 'woods' },
-    { id: 'hybrid', name: 'Hybrid', category: 'hybrids' },
-    { id: '3iron', name: '3 Iron', category: 'irons' },
-    { id: '4iron', name: '4 Iron', category: 'irons' },
-    { id: '5iron', name: '5 Iron', category: 'irons' },
-    { id: '6iron', name: '6 Iron', category: 'irons' },
-    { id: '7iron', name: '7 Iron', category: 'irons' },
-    { id: '8iron', name: '8 Iron', category: 'irons' },
-    { id: '9iron', name: '9 Iron', category: 'irons' },
-    { id: 'pwedge', name: 'PW', category: 'wedges' },
-    { id: 'awedge', name: 'AW', category: 'wedges' },
-    { id: 'swedge', name: 'SW', category: 'wedges' },
-    { id: 'lwedge', name: 'LW', category: 'wedges' },
-    { id: 'putter', name: 'Putter', category: 'putter' }
-  ];
+  // Club selection options moved to clubService
 
   // Initialize component
   useEffect(() => {
@@ -238,11 +220,10 @@ const ScorecardContainer = ({ route, navigation }) => {
     currentAchievements,
     setCurrentAchievements,
     courseStats,
-    showClubModal,
-    setShowClubModal,
+    // showClubModal and setShowClubModal removed - using SmartClubSelector now
     expandedCategories,
     setExpandedCategories,
-    CLUB_OPTIONS,
+    // CLUB_OPTIONS removed - using clubService now
     navigation,
     token,
     settings,
@@ -262,7 +243,7 @@ const ScorecardContainer = ({ route, navigation }) => {
     showAchievements,
     currentAchievements,
     courseStats,
-    showClubModal,
+    // showClubModal removed - using SmartClubSelector now
     expandedCategories,
     navigation,
     token,

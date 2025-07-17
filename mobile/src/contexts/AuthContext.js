@@ -53,6 +53,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
+    console.log('🔐 Starting login request...');
+    console.log('📍 API URL:', API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.AUTH.LOGIN);
+    console.log('📧 Email:', email);
+    
     try {
       const response = await fetch(API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.AUTH.LOGIN, {
         method: 'POST',
@@ -62,10 +66,18 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ email, password }),
       });
       
+      console.log('📡 Response received:', response.status, response.statusText);
+      console.log('📡 Response ok:', response.ok);
+      
       const data = await response.json();
+      console.log('📦 Response data:', data);
       
       if (response.ok) {
         const { token: authToken, user: userData } = data.data;
+        
+        console.log('✅ Login successful, storing auth data...');
+        console.log('🎫 Token received:', authToken ? 'yes' : 'no');
+        console.log('👤 User data:', userData);
         
         // Store auth data
         await AsyncStorage.setItem('authToken', authToken);
@@ -77,12 +89,18 @@ export const AuthProvider = ({ children }) => {
         
         return { success: true };
       } else {
+        console.log('❌ Login failed:', data.error?.message || 'Login failed');
         return { 
           success: false, 
           error: data.error?.message || 'Login failed' 
         };
       }
     } catch (error) {
+      console.error('❌ Network error details:', error);
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
       return { 
         success: false, 
         error: 'Network error. Please check your connection.' 

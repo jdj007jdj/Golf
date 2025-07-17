@@ -15,6 +15,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { API_CONFIG } from '../../config/api';
 import persistentTileCache from '../../utils/persistentTileCache';
+import shotTrackingService from '../../services/shotTrackingService';
 
 const SettingsScreen = ({ navigation }) => {
   const { user, logout, token } = useAuth();
@@ -53,6 +54,10 @@ const SettingsScreen = ({ navigation }) => {
   const [cacheLimit, setCacheLimit] = useState(100); // MB
   const [cacheStats, setCacheStats] = useState(null);
   
+  // Sync Settings
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [syncInProgress, setSyncInProgress] = useState(false);
+  
 
   useEffect(() => {
     loadSettings();
@@ -70,6 +75,9 @@ const SettingsScreen = ({ navigation }) => {
       
       // Load cache settings
       await loadCacheSettings();
+      
+      // Load sync status
+      await loadSyncStatus();
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
@@ -89,6 +97,73 @@ const SettingsScreen = ({ navigation }) => {
       setCacheStats(stats);
     } catch (error) {
       console.error('Error loading cache settings:', error);
+    }
+  };
+
+  const loadSyncStatus = async () => {
+    try {
+      const status = await shotTrackingService.getSyncStatus();
+      setSyncStatus(status);
+    } catch (error) {
+      console.error('Error loading sync status:', error);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    if (syncInProgress) return;
+    
+    setSyncInProgress(true);
+    
+    try {
+      console.log('🔄 Manual sync triggered from settings');
+      
+      // Get queue service for direct access to sync results
+      const offlineQueue = await import('../../services/offlineQueueService');
+      const queueService = offlineQueue.default;
+      
+      // Force sync and get results
+      await shotTrackingService.forceSyncAll();
+      
+      // Try to sync the queue and get detailed results
+      const syncResults = await queueService.syncQueue();
+      
+      // Update sync status
+      await loadSyncStatus();
+      
+      // Check for partial success
+      if (syncResults && syncResults.length > 0) {
+        const successCount = syncResults.filter(r => r.success).length;
+        const failCount = syncResults.filter(r => !r.success).length;
+        
+        if (failCount > 0) {
+          // Some items failed
+          const failedItems = syncResults.filter(r => !r.success);
+          const errorMessages = failedItems.map(item => {
+            if (item.item.type === 'shot_sync') {
+              return `Shot sync: ${item.error || 'Unknown error'}`;
+            }
+            return `${item.item.type}: ${item.error || 'Unknown error'}`;
+          }).join('\n');
+          
+          Alert.alert(
+            'Partial Sync',
+            `Synced ${successCount} items successfully.\n${failCount} items failed:\n\n${errorMessages}`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          // All succeeded
+          Alert.alert('Success', `All ${successCount} items synced successfully`);
+        }
+      } else {
+        // No items to sync or already synced
+        Alert.alert('Success', 'All data is up to date');
+      }
+      
+    } catch (error) {
+      console.error('Error during manual sync:', error);
+      Alert.alert('Error', `Sync failed: ${error.message}`);
+    } finally {
+      setSyncInProgress(false);
     }
   };
 
@@ -432,6 +507,99 @@ const SettingsScreen = ({ navigation }) => {
           )}
         </View>
 
+        {/* Data Sync Section */}
+        {renderSectionHeader('Data Sync')}
+        <View style={styles.section}>
+          <TouchableOpacity 
+            style={[styles.syncButton, syncInProgress && styles.syncButtonDisabled]} 
+            onPress={handleSyncNow}
+            disabled={syncInProgress}
+          >
+            <Text style={[styles.syncButtonText, syncInProgress && styles.syncButtonTextDisabled]}>
+              {syncInProgress ? 'Syncing...' : 'Sync Now'}
+            </Text>
+          </TouchableOpacity>
+          
+          {syncStatus && (
+            <View style={styles.syncStatusContainer}>
+              <Text style={styles.syncStatusTitle}>Sync Status</Text>
+              
+              <View style={styles.syncStatusRow}>
+                <Text style={styles.syncStatusLabel}>Pending Shots:</Text>
+                <Text style={styles.syncStatusValue}>
+                  {syncStatus.shots.pendingShots || 0} shots
+                </Text>
+              </View>
+              
+              <View style={styles.syncStatusRow}>
+                <Text style={styles.syncStatusLabel}>Shots Queue:</Text>
+                <Text style={styles.syncStatusValue}>
+                  {syncStatus.shots.total || 0} items
+                </Text>
+              </View>
+              
+              <View style={styles.syncStatusRow}>
+                <Text style={styles.syncStatusLabel}>Course Knowledge:</Text>
+                <Text style={styles.syncStatusValue}>
+                  {syncStatus.courseKnowledge.total || 0} items
+                </Text>
+              </View>
+              
+              <View style={styles.syncStatusRow}>
+                <Text style={styles.syncStatusLabel}>Network:</Text>
+                <Text style={[
+                  styles.syncStatusValue,
+                  syncStatus.shots.isOnline ? styles.syncStatusOnline : styles.syncStatusOffline
+                ]}>
+                  {syncStatus.shots.isOnline ? 'Online' : 'Offline'}
+                </Text>
+              </View>
+              
+              <View style={styles.syncStatusRow}>
+                <Text style={styles.syncStatusLabel}>Auth Token:</Text>
+                <Text style={[
+                  styles.syncStatusValue,
+                  token ? styles.syncStatusOnline : styles.syncStatusOffline
+                ]}>
+                  {token ? 'Available' : 'Not Available'}
+                </Text>
+              </View>
+              
+              {/* Show last sync results if available */}
+              {syncStatus.lastSyncResults && syncStatus.lastSyncResults.timestamp && (
+                <View style={styles.lastSyncSection}>
+                  <Text style={styles.lastSyncTitle}>Last Sync Results</Text>
+                  <Text style={styles.lastSyncTime}>
+                    {new Date(syncStatus.lastSyncResults.timestamp).toLocaleTimeString()}
+                  </Text>
+                  
+                  {syncStatus.lastSyncResults.summary.partialSuccess && (
+                    <View style={styles.syncWarning}>
+                      <Text style={styles.syncWarningText}>
+                        ⚠️ Partial sync: {syncStatus.lastSyncResults.summary.successCount} succeeded, {syncStatus.lastSyncResults.summary.failureCount} failed
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {syncStatus.lastSyncResults.details.map((detail, index) => (
+                    <View key={index} style={styles.syncDetailRow}>
+                      <Text style={styles.syncDetailType}>
+                        {detail.type === 'shots' ? '📍 Shots' : '🎓 Course Knowledge'}
+                      </Text>
+                      <Text style={[
+                        styles.syncDetailMessage,
+                        detail.errors.length > 0 && styles.syncDetailError
+                      ]}>
+                        {detail.message}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
         {/* Account Section */}
         {renderSectionHeader('Account')}
         <View style={styles.section}>
@@ -701,6 +869,103 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FF5252',
     fontWeight: '500',
+  },
+  syncButton: {
+    margin: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: '#2E7D32',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  syncButtonDisabled: {
+    backgroundColor: '#999999',
+  },
+  syncButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  syncButtonTextDisabled: {
+    color: '#E0E0E0',
+  },
+  syncStatusContainer: {
+    marginTop: 10,
+    marginHorizontal: 16,
+    padding: 15,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+  },
+  syncStatusTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 10,
+  },
+  syncStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  syncStatusLabel: {
+    fontSize: 14,
+    color: '#666666',
+  },
+  syncStatusValue: {
+    fontSize: 14,
+    color: '#1A1A1A',
+    fontWeight: '500',
+  },
+  syncStatusOnline: {
+    color: '#2E7D32',
+  },
+  syncStatusOffline: {
+    color: '#FF5252',
+  },
+  lastSyncSection: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  lastSyncTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666666',
+    marginBottom: 5,
+  },
+  lastSyncTime: {
+    fontSize: 12,
+    color: '#999999',
+    marginBottom: 10,
+  },
+  syncWarning: {
+    backgroundColor: '#FFF3CD',
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 10,
+  },
+  syncWarningText: {
+    fontSize: 13,
+    color: '#856404',
+  },
+  syncDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  syncDetailType: {
+    fontSize: 13,
+    marginRight: 10,
+    width: 120,
+  },
+  syncDetailMessage: {
+    fontSize: 13,
+    color: '#666666',
+    flex: 1,
+  },
+  syncDetailError: {
+    color: '#D32F2F',
   },
 });
 

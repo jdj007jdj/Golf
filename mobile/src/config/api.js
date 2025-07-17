@@ -23,6 +23,16 @@ export const API_CONFIG = {
     USERS: {
       PROFILE: '/api/users/profile',
       STATS: '/api/users/stats'
+    },
+    SHOTS: {
+      SYNC: '/api/sync/shots',
+      ROUND: '/api/shots/round',
+      HISTORY: '/api/shots/history'
+    },
+    COURSE_LEARNING: {
+      CONTRIBUTE: '/api/course-learning/contribute',
+      DATA: '/api/course-learning/data',
+      SYNC: '/api/sync/course-learning'
     }
   }
 };

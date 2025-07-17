@@ -7,6 +7,10 @@ import Geolocation from 'react-native-geolocation-service';
 import { Shot, ShotCollection } from '../models/Shot';
 import { calculateDistance, calculateShotDistances } from '../utils/gpsCalculations';
 import courseKnowledgeService from './courseKnowledgeService';
+import shotSyncService from './shotSyncService';
+import courseKnowledgeAggregationService from './courseKnowledgeAggregationService';
+import offlineQueueService from './offlineQueueService';
+import syncResultTracker from './syncResultTracker';
 
 const STORAGE_KEY_PREFIX = 'golf_shots_';
 const CURRENT_ROUND_KEY = 'current_round_shots';
@@ -27,8 +31,10 @@ class ShotTrackingService {
       this.courseId = courseId;
       console.log('Loading shots for round:', roundId, 'course:', courseId);
       
-      // Initialize course knowledge service
+      // Initialize services
       await courseKnowledgeService.initialize();
+      await shotSyncService.initialize();
+      await courseKnowledgeAggregationService.initialize();
       
       await this.loadShots();
       console.log('Loaded shots:', this.currentRoundShots.shots.length);
@@ -75,7 +81,7 @@ class ShotTrackingService {
           accuracy: 5,
           timestamp: new Date().toISOString()
         },
-        clubId: 'driver',
+        clubId: null, // TODO: Use proper UUID from user's clubs
         scoreAfterShot: 1
       },
       {
@@ -87,7 +93,7 @@ class ShotTrackingService {
           accuracy: 5,
           timestamp: new Date().toISOString()
         },
-        clubId: '7iron',
+        clubId: null, // TODO: Use proper UUID from user's clubs
         scoreAfterShot: 2
       },
       {
@@ -99,7 +105,7 @@ class ShotTrackingService {
           accuracy: 5,
           timestamp: new Date().toISOString()
         },
-        clubId: 'pwedge',
+        clubId: null, // TODO: Use proper UUID from user's clubs
         scoreAfterShot: 3
       },
       {
@@ -111,13 +117,16 @@ class ShotTrackingService {
           accuracy: 5,
           timestamp: new Date().toISOString()
         },
-        clubId: 'putter',
+        clubId: null, // TODO: Use proper UUID from user's clubs
         scoreAfterShot: 4
       }
     ];
 
     for (const shotData of demoShots) {
-      const shot = new Shot(shotData);
+      const shot = new Shot({
+        ...shotData,
+        roundId: this.roundId  // Add the current roundId to demo shots
+      });
       this.currentRoundShots.addShot(shot);
       console.log(`Added shot ${shot.shotNumber} at: ${shot.coordinates.latitude}, ${shot.coordinates.longitude}`);
     }
@@ -189,6 +198,9 @@ class ShotTrackingService {
       if (this.courseId) {
         await courseKnowledgeService.processShot(shot, this.currentRoundShots.shots, this.courseId);
       }
+      
+      // Trigger sync if online (shots will be queued automatically)
+      this.triggerSync();
       
       console.log(`Shot logged: Hole ${holeNumber}, Shot ${shotNumber}`);
       return shot;
@@ -489,6 +501,76 @@ class ShotTrackingService {
         timestamp: new Date().toISOString()
       }
     };
+  }
+
+  /**
+   * Trigger sync for shots and course knowledge
+   */
+  async triggerSync() {
+    try {
+      // Trigger shot sync
+      await shotSyncService.syncPendingShots();
+      
+      // Trigger course knowledge sync
+      await courseKnowledgeAggregationService.syncCourseKnowledge();
+    } catch (error) {
+      console.error('Error triggering sync:', error);
+      // Don't throw - sync should not block normal operation
+    }
+  }
+
+  /**
+   * Get sync status for shots and course knowledge
+   */
+  async getSyncStatus() {
+    const shotStatus = await shotSyncService.getSyncStatus();
+    const courseStatus = courseKnowledgeAggregationService.getSyncStatus();
+    const lastResults = syncResultTracker.getLastSyncResults();
+    
+    return {
+      shots: shotStatus,
+      courseKnowledge: courseStatus,
+      lastSyncResults: lastResults
+    };
+  }
+
+  /**
+   * Force sync all data
+   */
+  async forceSyncAll() {
+    console.log('🔄 Force syncing all data...');
+    await shotSyncService.forceSyncShots();
+    await courseKnowledgeAggregationService.forceSyncCourseKnowledge();
+  }
+
+  /**
+   * Complete round and trigger final sync
+   */
+  async completeRound() {
+    try {
+      const roundSummary = {
+        roundId: this.roundId,
+        courseId: this.courseId,
+        totalShots: this.currentRoundShots.shots.length,
+        completedAt: new Date().toISOString(),
+        shots: this.currentRoundShots.toJSON()
+      };
+
+      // Add round completion to sync queue
+      const token = await AsyncStorage.getItem('auth_token');
+      if (token) {
+        await offlineQueueService.queueRoundCompletion(token, this.roundId, roundSummary);
+      }
+
+      // Final sync attempt
+      await this.forceSyncAll();
+
+      console.log('✅ Round completed and queued for sync');
+      return roundSummary;
+    } catch (error) {
+      console.error('Error completing round:', error);
+      throw error;
+    }
   }
 }
 

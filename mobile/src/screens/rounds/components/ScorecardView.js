@@ -12,6 +12,8 @@ import {
   Switch,
 } from 'react-native';
 import shotTrackingService from '../../../services/shotTrackingService';
+import SmartClubSelector from '../../../components/SmartClubSelector';
+import clubService from '../../../services/clubService';
 
 const { width } = Dimensions.get('window');
 
@@ -30,26 +32,48 @@ const ScorecardView = ({
   historicalData,
   clubData,
   settings,
-  CLUB_OPTIONS,
+  // CLUB_OPTIONS removed - using clubService now
   navigation,
   isSavingRound,
   setIsSavingRound,
   token,
-  showClubModal,
-  setShowClubModal,
+  // showClubModal and setShowClubModal removed - using SmartClubSelector now
   expandedCategories,
   setExpandedCategories,
 }) => {
   const [scoreAnimation] = useState(new Animated.Value(1));
+  const [showSmartClubSelector, setShowSmartClubSelector] = useState(false);
+  const [selectedClub, setSelectedClub] = useState(null);
   const [statisticsCardExpanded, setStatisticsCardExpanded] = useState(true);
   const [isShotTrackingEnabled, setIsShotTrackingEnabled] = useState(true);
 
-  // Initialize shot tracking service
+  // Initialize shot tracking service and club service
   useEffect(() => {
-    if (round?.id) {
-      shotTrackingService.initialize(round.id, course?.id);
-    }
+    const initializeServices = async () => {
+      if (round?.id) {
+        try {
+          await shotTrackingService.initialize(round.id, course?.id);
+          await clubService.initialize();
+          console.log('Shot tracking and club services initialized for round:', round.id);
+        } catch (error) {
+          console.error('Error initializing services:', error);
+        }
+      }
+    };
+
+    initializeServices();
   }, [round?.id, course?.id]);
+
+  // Update selected club when hole changes
+  useEffect(() => {
+    const clubId = clubs[currentHole];
+    if (clubId) {
+      const club = clubService.getClub(clubId);
+      setSelectedClub(club);
+    } else {
+      setSelectedClub(null);
+    }
+  }, [currentHole, clubs]);
 
   // Calculate totals
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
@@ -118,13 +142,18 @@ const ScorecardView = ({
     }));
   };
 
-  // Handle club selection
-  const handleClubSelection = (holeNumber, clubId) => {
+  // Handle club selection with smart selector
+  const handleClubSelection = async (clubId) => {
     setClubs(prev => ({
       ...prev,
-      [holeNumber]: clubId
+      [currentHole]: clubId
     }));
-    setShowClubModal(false);
+    
+    // Update selected club display
+    const club = clubService.getClub(clubId);
+    setSelectedClub(club);
+    
+    setShowSmartClubSelector(false);
   };
 
   // Handle navigation between holes
@@ -308,16 +337,19 @@ const ScorecardView = ({
             </View>
           </View>
 
-          {/* Club Selection */}
+          {/* Smart Club Selection */}
           <View style={styles.clubSelection}>
-            <Text style={styles.clubLabel}>Club Used</Text>
             <TouchableOpacity
-              style={styles.clubButton}
-              onPress={() => setShowClubModal(true)}
+              style={styles.smartClubButton}
+              onPress={() => setShowSmartClubSelector(true)}
             >
-              <Text style={styles.clubButtonText}>
-                {currentHoleClub ? CLUB_OPTIONS.find(c => c.id === currentHoleClub)?.name : 'Select Club'}
-              </Text>
+              <View style={styles.clubButtonContent}>
+                <Text style={styles.clubButtonLabel}>Club</Text>
+                <Text style={styles.clubButtonText}>
+                  {selectedClub ? selectedClub.getShortName() : 'Select'}
+                </Text>
+              </View>
+              <Text style={styles.clubButtonArrow}>🏌️</Text>
             </TouchableOpacity>
           </View>
 
@@ -359,36 +391,14 @@ const ScorecardView = ({
         </View>
       </ScrollView>
 
-      {/* Club Selection Modal */}
-      <Modal
-        visible={showClubModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowClubModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Club</Text>
-            <ScrollView style={styles.clubList}>
-              {CLUB_OPTIONS.map(club => (
-                <TouchableOpacity
-                  key={club.id}
-                  style={styles.clubOption}
-                  onPress={() => handleClubSelection(currentHole, club.id)}
-                >
-                  <Text style={styles.clubOptionText}>{club.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setShowClubModal(false)}
-            >
-              <Text style={styles.modalCloseButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Smart Club Selection Modal */}
+      <SmartClubSelector
+        visible={showSmartClubSelector}
+        onClose={() => setShowSmartClubSelector(false)}
+        onClubSelect={handleClubSelection}
+        holeNumber={currentHole}
+        courseId={course?.id}
+      />
     </View>
   );
 };
@@ -623,8 +633,7 @@ const styles = StyleSheet.create({
   },
   clubSelection: {
     backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
+    borderRadius: 12,
     marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -632,24 +641,34 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  clubLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-  },
-  clubButton: {
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+  smartClubButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#e9ecef',
+  },
+  clubButtonContent: {
+    flex: 1,
+  },
+  clubButtonLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   clubButtonText: {
     fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
+    color: '#1a1a1a',
+    fontWeight: '600',
+  },
+  clubButtonArrow: {
+    fontSize: 20,
+    marginLeft: 12,
   },
   historicalSection: {
     backgroundColor: 'white',
@@ -700,52 +719,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
-    width: width * 0.8,
-    maxHeight: '70%',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  clubList: {
-    maxHeight: 300,
-  },
-  clubOption: {
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  clubOptionText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  modalCloseButton: {
-    backgroundColor: '#2e7d32',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  modalCloseButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  // Old modal styles removed - using SmartClubSelector now
+  // modalCloseButton styles removed - using SmartClubSelector now
 });
 
 export default ScorecardView;
