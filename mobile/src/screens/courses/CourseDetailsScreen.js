@@ -152,6 +152,20 @@ const CourseDetailsScreen = ({ route, navigation }) => {
 
       <View style={styles.footer}>
         <TouchableOpacity 
+          style={styles.downloadButton}
+          onPress={() => navigation.navigate('CourseDownload', { 
+            course: course,
+            courseCenter: {
+              latitude: course.latitude || 33.5031, // Default to Augusta if no coordinates
+              longitude: course.longitude || -82.0206
+            }
+          })}
+        >
+          <Text style={styles.downloadIcon}>📥</Text>
+          <Text style={styles.downloadText}>Download Maps for Offline Play</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
           style={styles.startButton}
           onPress={handleStartRound}
         >
@@ -294,6 +308,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
+  },
+  downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#2e7d32',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+  },
+  downloadIcon: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  downloadText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2e7d32',
   },
   startButton: {
     backgroundColor: '#2e7d32',
