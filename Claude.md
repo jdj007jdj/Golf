@@ -278,8 +278,13 @@ The plan contains 5 phases from Foundation Stabilization to Advanced Features. A
   - Touch-based tile selection at zoom 18
   - Tile overlay visualization (green with borders)
   - Selection counter and estimated download size
+  - **Enhanced Selection**: Drag-to-select multiple tiles ✅
+    - Continuous selection as you drag across map
+    - Intelligent add/remove mode detection
+    - "Select Visible" quick selection button
+    - Improved touch handling with onTouchStart/Move/End
 
-**Current Status**: Phase 2 complete, ready for Phase 3 (Download Implementation)
+**Current Status**: Phase 2 complete with enhanced drag selection, ready for Phase 3 (Download Implementation)
    
 4. **Performance Improvements**:
    - Instant tile loading from memory cache

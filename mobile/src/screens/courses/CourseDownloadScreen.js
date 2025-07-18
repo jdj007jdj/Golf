@@ -8,7 +8,6 @@ import {
   SafeAreaView,
   Alert,
   Modal,
-  PanResponder,
   Dimensions,
 } from 'react-native';
 import CleanMapView from '../../components/CleanMapView';
@@ -104,37 +103,99 @@ const CourseDownloadScreen = ({ route, navigation }) => {
     return { lat, lon };
   };
 
-  // Handle touch on the overlay
-  const handleTouchOnMap = (event) => {
-    if (mode !== 'select') return; // Only handle touches in select mode
-    
-    const { locationX, locationY } = event.nativeEvent;
-    
+  // Track if we're in selection mode (adding or removing tiles)
+  const [selectionMode, setSelectionMode] = useState(null); // 'add' or 'remove'
+  const [lastProcessedTile, setLastProcessedTile] = useState(null);
+
+  // Process tile at given coordinates
+  const processTileAtCoordinates = (locationX, locationY) => {
     if (!mapBounds) return;
     
-    // Calculate lat/lon from touch coordinates
-    const relativeY = locationY;
-    const relativeX = locationX;
-    const mapHeight = screenHeight * 0.6; // Approximate map height
+    const mapHeight = screenHeight * 0.6;
     const mapWidth = screenWidth;
     
-    const lat = mapBounds.north - (relativeY / mapHeight) * (mapBounds.north - mapBounds.south);
-    const lon = mapBounds.west + (relativeX / mapWidth) * (mapBounds.east - mapBounds.west);
+    const lat = mapBounds.north - (locationY / mapHeight) * (mapBounds.north - mapBounds.south);
+    const lon = mapBounds.west + (locationX / mapWidth) * (mapBounds.east - mapBounds.west);
     
     // Convert to zoom 18 tile
     const tile = latLonToTile(lat, lon, 18);
     const tileKey = getTileKey(tile.x, tile.y, tile.z);
     
-    // Toggle tile selection
+    // Skip if we already processed this tile in the current gesture
+    if (tileKey === lastProcessedTile) return;
+    
+    setLastProcessedTile(tileKey);
+    
+    // Apply selection based on mode
     setSelectedTiles(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(tileKey)) {
+      
+      if (selectionMode === 'add') {
+        newSet.add(tileKey);
+      } else if (selectionMode === 'remove') {
         newSet.delete(tileKey);
       } else {
-        newSet.add(tileKey);
+        // First touch - determine mode based on whether tile is selected
+        if (newSet.has(tileKey)) {
+          setSelectionMode('remove');
+          newSet.delete(tileKey);
+        } else {
+          setSelectionMode('add');
+          newSet.add(tileKey);
+        }
       }
+      
       return newSet;
     });
+  };
+
+  // Handle touch start
+  const handleTouchStart = (event) => {
+    if (mode !== 'select') return;
+    
+    const { locationX, locationY } = event.nativeEvent;
+    processTileAtCoordinates(locationX, locationY);
+  };
+
+  // Handle touch move
+  const handleTouchMove = (event) => {
+    if (mode !== 'select' || selectionMode === null) return;
+    
+    const { locationX, locationY } = event.nativeEvent;
+    processTileAtCoordinates(locationX, locationY);
+  };
+
+  // Handle touch end
+  const handleTouchEnd = () => {
+    setSelectionMode(null);
+    setLastProcessedTile(null);
+  };
+
+  // Select all visible tiles on screen
+  const selectVisibleArea = () => {
+    if (!mapBounds) return;
+    
+    const newTiles = new Set(selectedTiles);
+    
+    // Calculate visible tile range at zoom 18
+    const zoom = 18;
+    
+    // Convert bounds to tile coordinates
+    const minTileX = Math.floor((mapBounds.west + 180) / 360 * Math.pow(2, zoom));
+    const maxTileX = Math.floor((mapBounds.east + 180) / 360 * Math.pow(2, zoom));
+    
+    const minTileY = Math.floor((1 - Math.log(Math.tan(mapBounds.north * Math.PI / 180) + 1 / Math.cos(mapBounds.north * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+    const maxTileY = Math.floor((1 - Math.log(Math.tan(mapBounds.south * Math.PI / 180) + 1 / Math.cos(mapBounds.south * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+    
+    // Add all tiles in the visible range
+    for (let x = minTileX; x <= maxTileX; x++) {
+      for (let y = minTileY; y <= maxTileY; y++) {
+        const tileKey = getTileKey(x, y, zoom);
+        newTiles.add(tileKey);
+      }
+    }
+    
+    setSelectedTiles(newTiles);
   };
 
   // Calculate download size
@@ -246,6 +307,16 @@ const CourseDownloadScreen = ({ route, navigation }) => {
             {mode === 'pan' ? 'Enable Selection' : 'Selection Mode'}
           </Text>
         </TouchableOpacity>
+        
+        {mode === 'select' && (
+          <TouchableOpacity
+            style={styles.selectVisibleButton}
+            onPress={selectVisibleArea}
+          >
+            <Text style={styles.selectVisibleText}>Select Visible</Text>
+          </TouchableOpacity>
+        )}
+        
         <Text style={styles.controlInfo}>
           {mode === 'pan' ? 'Drag to pan' : `${selectedTiles.size} tiles selected`}
         </Text>
@@ -265,7 +336,9 @@ const CourseDownloadScreen = ({ route, navigation }) => {
         {mode === 'select' && (
           <View 
             style={styles.touchOverlay}
-            onTouchEnd={handleTouchOnMap}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           />
         )}
         
@@ -310,7 +383,7 @@ const CourseDownloadScreen = ({ route, navigation }) => {
         <Text style={styles.selectionInfo}>
           {selectedTiles.size > 0 
             ? `Selected: ${selectedTiles.size} tiles (~${getDownloadSize()} MB)`
-            : 'No tiles selected'
+            : mode === 'select' ? 'Touch and drag to select tiles' : 'Switch to selection mode'
           }
         </Text>
         
@@ -428,6 +501,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#fff',
     fontWeight: '500',
+  },
+  selectVisibleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  selectVisibleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2e7d32',
   },
   mapContainer: {
     flex: 1,

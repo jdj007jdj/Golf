@@ -34,6 +34,12 @@ Based on the implementation progress, we have successfully achieved:
   - Visual overlay showing selected tiles (green with borders)
   - Real-time selection counter
   - Clean map view without scorecard UI elements
+  - **Enhanced with Drag Selection**:
+    - Touch and drag to select multiple tiles in one gesture
+    - Intelligent mode detection (add vs remove tiles)
+    - "Select Visible" button for quick area selection
+    - Smooth continuous selection with onTouchMove
+    - No need to tap each tile individually
 
 #### What's Needed:
 - [ ] **Bulk Download Logic**
