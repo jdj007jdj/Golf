@@ -18,20 +18,28 @@ Based on the implementation progress, we have successfully achieved:
 
 ## 🚀 Outstanding Features to Complete
 
-### 1. **Pre-Round Course Download System** 🎯 HIGH PRIORITY
+### 1. **Pre-Round Course Download System** 🎯 HIGH PRIORITY - IN PROGRESS
 **Your Priority**: Download courses before playing to avoid using data on-course
 
-#### What's Needed:
-- [ ] **Course Download Manager UI**
-  - Course list with download status indicators
-  - Download progress bars with pause/resume
-  - Storage space management (current/available)
-  - WiFi-only download option with cellular override
+#### What's Completed:
+- [x] **Course Download Screen UI**
+  - Navigation integration from Settings screen
+  - Course name display in header
+  - Download button and progress tracking
+  - Storage space indicator (tile count and estimated MB)
   
+- [x] **Touch Selection System**
+  - Pan/select mode toggle with clear visual controls
+  - Touch to select individual zoom 18 tiles
+  - Visual overlay showing selected tiles (green with borders)
+  - Real-time selection counter
+  - Clean map view without scorecard UI elements
+
+#### What's Needed:
 - [ ] **Bulk Download Logic**
-  - Calculate tiles needed for entire course (zoom levels 15-18)
+  - Integration with persistent tile cache
   - Batch download with retry logic and error handling
-  - Background download capability
+  - Progress tracking and error recovery
   - Download queue management for multiple courses
 
 - [ ] **Download Settings**
@@ -40,7 +48,7 @@ Based on the implementation progress, we have successfully achieved:
   - Download quality settings (zoom level limits)
   - Download scheduling (overnight, WiFi-only)
 
-**Implementation Estimate**: 2-3 days
+**Implementation Progress**: Phase 2 of 4 complete
 **User Impact**: Massive - enables true offline golf experience
 
 ### 2. **Professional Rangefinder Features** 🎯 HIGH PRIORITY

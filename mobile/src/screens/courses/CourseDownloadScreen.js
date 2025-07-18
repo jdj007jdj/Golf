@@ -8,10 +8,16 @@ import {
   SafeAreaView,
   Alert,
   Modal,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
-import MapViewWithGestures from '../rounds/components/MapViewWithGestures';
+import CleanMapView from '../../components/CleanMapView';
 import persistentTileCache from '../../utils/persistentTileCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { latLonToTile, getTileKey, tileToBounds, getMapTilerUrl } from '../../utils/tileCalculations';
+import { MAP_CONFIG } from '../../config/mapConfig';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const CourseDownloadScreen = ({ route, navigation }) => {
   const { course, courseCenter } = route.params;
@@ -19,46 +25,116 @@ const CourseDownloadScreen = ({ route, navigation }) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [showProgressModal, setShowProgressModal] = useState(false);
-  const [basePosition] = useState({
+  const [basePosition, setBasePosition] = useState({
     center: [courseCenter.longitude, courseCenter.latitude],
     zoom: 15, // Display at zoom 15 for overview
   });
+  const [mapBounds, setMapBounds] = useState(null);
+  const [tileOverlays, setTileOverlays] = useState([]);
+  const [mode, setMode] = useState('pan'); // 'pan' or 'select'
+  
+  console.log('🎯 CourseDownloadScreen - Current mode:', mode);
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
 
-  // Calculate zoom 18 tile from lat/lon
-  const getTileFromLatLon = (lat, lon) => {
-    const zoom = 18; // Download zoom level
-    const n = Math.pow(2, zoom);
-    const x = Math.floor((lon + 180) / 360 * n);
-    const y = Math.floor(
-      (1 - Math.log(
-        Math.tan(lat * Math.PI / 180) + 
-        1 / Math.cos(lat * Math.PI / 180)
-      ) / Math.PI) / 2 * n
-    );
-    return { x, y, z: zoom };
-  };
-
-  // Convert tile back to lat/lon bounds for display
-  const getTileBounds = (x, y, z) => {
-    const n = Math.pow(2, z);
-    const lon1 = x / n * 360 - 180;
-    const lat1 = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI;
-    const lon2 = (x + 1) / n * 360 - 180;
-    const lat2 = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n))) * 180 / Math.PI;
+  // Calculate visible bounds based on zoom level and center
+  const calculateMapBounds = (center, zoom) => {
+    const metersPerPixel = 156543.03392 * Math.cos(center[1] * Math.PI / 180) / Math.pow(2, zoom);
+    const halfWidthInDegrees = (screenWidth * metersPerPixel / 2) / 111320;
+    const halfHeightInDegrees = (screenHeight * metersPerPixel / 2) / 111320;
     
     return {
-      north: lat1,
-      south: lat2,
-      east: lon2,
-      west: lon1,
+      north: center[1] + halfHeightInDegrees,
+      south: center[1] - halfHeightInDegrees,
+      east: center[0] + halfWidthInDegrees,
+      west: center[0] - halfWidthInDegrees,
     };
   };
 
-  // Handle map touch to select tiles
-  const handleMapPress = (event) => {
-    // MapViewWithGestures uses gesture handler, so we need to handle touch differently
-    // For now, we'll add a tap handler overlay
-    console.log('Map pressed - tile selection will be implemented');
+  // Update map bounds when component mounts
+  useEffect(() => {
+    const bounds = calculateMapBounds(basePosition.center, basePosition.zoom);
+    setMapBounds(bounds);
+  }, [basePosition]);
+
+  // Update tile overlays when selection changes
+  useEffect(() => {
+    if (!mapBounds) return;
+    
+    const overlays = Array.from(selectedTiles).map(tileKey => {
+      const [z, x, y] = tileKey.split('/').map(Number);
+      const bounds = tileToBounds(x, y, z);
+      
+      // Convert bounds to screen coordinates
+      const mapHeight = screenHeight * 0.6;
+      const mapWidth = screenWidth;
+      
+      const left = ((bounds.west - mapBounds.west) / (mapBounds.east - mapBounds.west)) * mapWidth;
+      const right = ((bounds.east - mapBounds.west) / (mapBounds.east - mapBounds.west)) * mapWidth;
+      const top = ((mapBounds.north - bounds.north) / (mapBounds.north - mapBounds.south)) * mapHeight;
+      const bottom = ((mapBounds.north - bounds.south) / (mapBounds.north - mapBounds.south)) * mapHeight;
+      
+      // Only include tiles that are visible on screen
+      if (left < mapWidth && right > 0 && top < mapHeight && bottom > 0) {
+        return {
+          key: tileKey,
+          left: Math.max(0, left),
+          top: Math.max(0, top),
+          width: Math.min(mapWidth - left, right - left),
+          height: Math.min(mapHeight - top, bottom - top),
+        };
+      }
+      return null;
+    }).filter(Boolean);
+    
+    setTileOverlays(overlays);
+  }, [selectedTiles, mapBounds]);
+
+  // Convert screen coordinates to lat/lon
+  const screenToLatLon = (x, y) => {
+    if (!mapBounds || !mapContainerRef.current) return null;
+    
+    // Direct calculation without measure (measure is async)
+    const mapHeight = screenHeight * 0.6; // Approximate map height
+    const mapWidth = screenWidth;
+    
+    const lat = mapBounds.north - (y / mapHeight) * (mapBounds.north - mapBounds.south);
+    const lon = mapBounds.west + (x / mapWidth) * (mapBounds.east - mapBounds.west);
+    
+    return { lat, lon };
+  };
+
+  // Handle touch on the overlay
+  const handleTouchOnMap = (event) => {
+    if (mode !== 'select') return; // Only handle touches in select mode
+    
+    const { locationX, locationY } = event.nativeEvent;
+    
+    if (!mapBounds) return;
+    
+    // Calculate lat/lon from touch coordinates
+    const relativeY = locationY;
+    const relativeX = locationX;
+    const mapHeight = screenHeight * 0.6; // Approximate map height
+    const mapWidth = screenWidth;
+    
+    const lat = mapBounds.north - (relativeY / mapHeight) * (mapBounds.north - mapBounds.south);
+    const lon = mapBounds.west + (relativeX / mapWidth) * (mapBounds.east - mapBounds.west);
+    
+    // Convert to zoom 18 tile
+    const tile = latLonToTile(lat, lon, 18);
+    const tileKey = getTileKey(tile.x, tile.y, tile.z);
+    
+    // Toggle tile selection
+    setSelectedTiles(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(tileKey)) {
+        newSet.delete(tileKey);
+      } else {
+        newSet.add(tileKey);
+      }
+      return newSet;
+    });
   };
 
   // Calculate download size
@@ -86,17 +162,40 @@ const CourseDownloadScreen = ({ route, navigation }) => {
       });
 
       let completed = 0;
+      const apiKey = MAP_CONFIG.MAPTILER.API_KEY || '9VwMyrJdecjrEB6fwLGJ';
+      
+      // Initialize cache once
+      await persistentTileCache.initialize();
+      
       for (const tile of tiles) {
-        // Use the existing preloadArea method or direct cache
-        const bounds = getTileBounds(tile.x, tile.y, tile.z);
-        
-        // For now, we'll use a simple approach
-        // In reality, we'd use persistentTileCache.preloadArea or similar
-        await persistentTileCache.initialize(); // Ensure initialized
-        
-        // Simulate download progress
-        completed++;
-        setDownloadProgress((completed / tiles.length) * 100);
+        try {
+          // Generate tile URL
+          const tileUrl = getMapTilerUrl(tile.x, tile.y, tile.z, apiKey);
+          
+          // Download and cache the tile
+          const response = await fetch(tileUrl);
+          if (response.ok) {
+            // Convert response to base64 for storage
+            const arrayBuffer = await response.arrayBuffer();
+            const base64 = btoa(
+              new Uint8Array(arrayBuffer)
+                .reduce((data, byte) => data + String.fromCharCode(byte), '')
+            );
+            
+            // Store in persistent cache
+            persistentTileCache.set(
+              getTileKey(tile.x, tile.y, tile.z),
+              base64,
+              tile.z
+            );
+          }
+          
+          completed++;
+          setDownloadProgress((completed / tiles.length) * 100);
+        } catch (error) {
+          console.error('Error downloading tile:', error);
+          // Continue with next tile
+        }
       }
 
       // Save download metadata
@@ -135,25 +234,74 @@ const CourseDownloadScreen = ({ route, navigation }) => {
         <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.instructions}>
-        <Text style={styles.instructionText}>
-          Touch areas on the map to select tiles for download
-        </Text>
-        <Text style={styles.subText}>
-          Zoom level 18 tiles will be downloaded for offline use
+      <View style={styles.controlBar}>
+        <TouchableOpacity
+          style={[styles.controlButton, mode === 'select' && styles.controlButtonActive]}
+          onPress={() => {
+            console.log('🔄 Toggling mode:', mode === 'pan' ? 'select' : 'pan');
+            setMode(mode === 'pan' ? 'select' : 'pan');
+          }}
+        >
+          <Text style={[styles.controlButtonText, mode === 'select' && styles.controlButtonTextActive]}>
+            {mode === 'pan' ? 'Enable Selection' : 'Selection Mode'}
+          </Text>
+        </TouchableOpacity>
+        <Text style={styles.controlInfo}>
+          {mode === 'pan' ? 'Drag to pan' : `${selectedTiles.size} tiles selected`}
         </Text>
       </View>
 
-      <View style={styles.mapContainer}>
-        <MapViewWithGestures
-          basePosition={basePosition}
-          onMapPress={handleMapPress}
+      <View style={styles.mapContainer} ref={mapContainerRef}>
+        <CleanMapView
+          initialCenter={basePosition.center}
+          initialZoom={basePosition.zoom}
+          isPanEnabled={mode === 'pan'}
+          onPositionChange={(newCenter, newZoom) => {
+            setBasePosition({ center: newCenter, zoom: newZoom });
+          }}
         />
         
-        {/* Overlay for selected tiles will be rendered here */}
+        {/* Touch overlay to capture tile selections - only active in select mode */}
+        {mode === 'select' && (
+          <View 
+            style={styles.touchOverlay}
+            onTouchEnd={handleTouchOnMap}
+          />
+        )}
+        
+        {/* Visual overlay showing selected tiles */}
         {selectedTiles.size > 0 && (
           <View style={styles.selectionOverlay} pointerEvents="none">
-            {/* Render selected tile overlays */}
+            {Array.from(selectedTiles).map(tileKey => {
+              const [z, x, y] = tileKey.split('/').map(Number);
+              const bounds = tileToBounds(x, y, z);
+              
+              // Convert bounds to screen coordinates
+              if (!mapBounds) return null;
+              
+              const mapHeight = screenHeight * 0.6;
+              const mapWidth = screenWidth;
+              
+              const left = ((bounds.west - mapBounds.west) / (mapBounds.east - mapBounds.west)) * mapWidth;
+              const right = ((bounds.east - mapBounds.west) / (mapBounds.east - mapBounds.west)) * mapWidth;
+              const top = ((mapBounds.north - bounds.north) / (mapBounds.north - mapBounds.south)) * mapHeight;
+              const bottom = ((mapBounds.north - bounds.south) / (mapBounds.north - mapBounds.south)) * mapHeight;
+              
+              return (
+                <View
+                  key={tileKey}
+                  style={[
+                    styles.tileOverlay,
+                    {
+                      left,
+                      top,
+                      width: right - left,
+                      height: bottom - top,
+                    }
+                  ]}
+                />
+              );
+            })}
           </View>
         )}
       </View>
@@ -244,28 +392,56 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 60,
   },
-  instructions: {
-    backgroundColor: '#e8f5e9',
+  controlBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#2e7d32',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#c8e6c9',
+    borderBottomWidth: 2,
+    borderBottomColor: '#1b5e20',
+    zIndex: 20,
+    elevation: 20, // For Android
   },
-  instructionText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1b5e20',
-    textAlign: 'center',
+  controlButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  subText: {
+  controlButtonActive: {
+    backgroundColor: '#fff',
+    borderColor: '#fff',
+  },
+  controlButtonText: {
     fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  controlButtonTextActive: {
     color: '#2e7d32',
-    textAlign: 'center',
-    marginTop: 4,
+  },
+  controlInfo: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '500',
   },
   mapContainer: {
     flex: 1,
     position: 'relative',
+    overflow: 'hidden',
+  },
+  touchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    backgroundColor: 'transparent',
   },
   selectionOverlay: {
     position: 'absolute',
@@ -273,6 +449,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    zIndex: 5,
+    pointerEvents: 'none',
+  },
+  tileOverlay: {
+    position: 'absolute',
+    backgroundColor: 'rgba(46, 125, 50, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(46, 125, 50, 0.8)',
   },
   footer: {
     backgroundColor: 'white',
