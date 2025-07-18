@@ -209,6 +209,20 @@ const StartRoundScreen = ({ route, navigation }) => {
           </View>
         </View>
 
+        <TouchableOpacity
+          style={styles.downloadMapsButton}
+          onPress={() => navigation.navigate('CourseDownload', { 
+            course: course,
+            courseCenter: {
+              latitude: course.latitude || 33.5031, // Default to Augusta if no coordinates
+              longitude: course.longitude || -82.0206
+            }
+          })}
+        >
+          <Text style={styles.downloadMapsIcon}>📥</Text>
+          <Text style={styles.downloadMapsText}>Download Maps for Offline Play</Text>
+        </TouchableOpacity>
+
         <View style={styles.roundInfo}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Date</Text>
@@ -370,6 +384,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
     fontSize: 17,
+  },
+  downloadMapsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#2e7d32',
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  downloadMapsIcon: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  downloadMapsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2e7d32',
   },
   roundInfo: {
     backgroundColor: 'white',
