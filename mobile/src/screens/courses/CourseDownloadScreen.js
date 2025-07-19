@@ -636,9 +636,9 @@ const styles = StyleSheet.create({
   },
   tileOverlay: {
     position: 'absolute',
-    backgroundColor: 'rgba(46, 125, 50, 0.3)',
-    borderWidth: 1,
-    borderColor: 'rgba(46, 125, 50, 0.8)',
+    backgroundColor: 'rgba(255, 152, 0, 0.4)', // Bright orange with transparency
+    borderWidth: 2,
+    borderColor: 'rgba(255, 152, 0, 0.9)', // Bright orange border
   },
   footer: {
     backgroundColor: 'white',

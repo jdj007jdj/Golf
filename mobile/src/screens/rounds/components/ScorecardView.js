@@ -15,6 +15,7 @@ import shotTrackingService from '../../../services/shotTrackingService';
 import SmartClubSelector from '../../../components/SmartClubSelector';
 import clubService from '../../../services/clubService';
 import gamePersistenceService from '../../../services/gamePersistenceService';
+import { detectAchievements } from '../../../utils/coursePerformanceUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -42,6 +43,11 @@ const ScorecardView = ({
   // showClubModal and setShowClubModal removed - using SmartClubSelector now
   expandedCategories,
   setExpandedCategories,
+  showAchievements,
+  setShowAchievements,
+  currentAchievements,
+  setCurrentAchievements,
+  courseStats,
 }) => {
   const [scoreAnimation] = useState(new Animated.Value(1));
   const [showSmartClubSelector, setShowSmartClubSelector] = useState(false);
@@ -305,8 +311,94 @@ const ScorecardView = ({
 
   // Handle navigation between holes
   const navigateToHole = (holeNumber) => {
+    console.log('[Achievements] Navigating from hole', currentHole, 'to hole', holeNumber);
+    console.log('[Achievements] Settings enabled:', settings?.scorecard?.showAchievementNotifications);
+    
     if (holeNumber >= 1 && holeNumber <= 18) {
+      // Check if we're moving to a different hole and have achievement notifications enabled
+      if (holeNumber !== currentHole && settings?.scorecard?.showAchievementNotifications) {
+        console.log('[Achievements] Different hole and notifications enabled - checking achievements');
+        // Detect achievements for the hole we're leaving
+        checkForAchievements(currentHole);
+      }
       setCurrentHole(holeNumber);
+    }
+  };
+  
+  // Check for achievements
+  const checkForAchievements = (completedHole) => {
+    console.log('[Achievements] Checking for achievements on hole:', completedHole);
+    console.log('[Achievements] Historical data exists:', !!historicalData);
+    console.log('[Achievements] Score for hole:', scores[completedHole]);
+    console.log('[Achievements] Course stats:', courseStats);
+    
+    if (!scores[completedHole]) {
+      console.log('[Achievements] Skipping - no score for hole');
+      return;
+    }
+    
+    // Get hole performance data from historical data
+    const holePerformance = historicalData?.holePerformance || {};
+    
+    // Detect achievements with correct parameters
+    const params = {
+      holeNumber: completedHole,
+      score: scores[completedHole],
+      holePerformance: holePerformance,
+      courseStats: courseStats || historicalData?.courseStats || {},
+      clubUsed: clubs[completedHole],
+      clubData: clubData || {},
+      currentRoundScores: scores
+    };
+    
+    console.log('[Achievements] Detection params:', params);
+    
+    const achievements = detectAchievements(params);
+    
+    // Check for special achievements even without historical data
+    const holeData = holes.find(h => h.holeNumber === completedHole);
+    const par = holeData?.par || 4;
+    const score = scores[completedHole];
+    
+    // Add eagle/birdie achievements if not already detected
+    if (score <= par - 2) {
+      // Eagle or better
+      const eagleAchievement = {
+        type: 'eagle',
+        icon: '🦅',
+        title: score === par - 2 ? 'Eagle!' : score === par - 3 ? 'Albatross!' : 'Hole in One!',
+        description: `Hole ${completedHole} - ${Math.abs(score - par)} under par!`,
+        priority: 'high'
+      };
+      
+      // Check if not already in achievements
+      if (!achievements.find(a => a.type === 'eagle' || a.type === 'first_eagle_hole')) {
+        achievements.push(eagleAchievement);
+      }
+    } else if (score === par - 1) {
+      // Birdie
+      const birdieAchievement = {
+        type: 'birdie',
+        icon: '🐦',
+        title: 'Birdie!',
+        description: `Hole ${completedHole} - 1 under par!`,
+        priority: 'medium'
+      };
+      
+      // Check if not already in achievements
+      if (!achievements.find(a => a.type === 'birdie')) {
+        achievements.push(birdieAchievement);
+      }
+    }
+    
+    console.log('[Achievements] Final achievements list:', achievements);
+    
+    if (achievements && achievements.length > 0) {
+      console.log('[Achievements] Showing achievements popup');
+      setCurrentAchievements(achievements);
+      setShowAchievements(true);
+    } else {
+      console.log('[Achievements] No achievements detected');
     }
   };
 
