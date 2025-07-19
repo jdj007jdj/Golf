@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useScorecardContext } from '../contexts/ScorecardContext';
 import gameCalculationService from '../../../services/gameCalculationService';
+import gamePersistenceService from '../../../services/gamePersistenceService';
 import NassauStatusModal from './NassauStatusModal';
 import StablefordLeaderboardModal from './StablefordLeaderboardModal';
 import MatchPlayStatusModal from './MatchPlayStatusModal';
@@ -26,6 +27,8 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
     setScores,
     putts,
     setPutts,
+    round,
+    token,
   } = useScorecardContext();
   
   const [playerScores, setPlayerScores] = useState({});
@@ -35,19 +38,34 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
   const [showStablefordModal, setShowStablefordModal] = useState(false);
   const [showMatchPlayModal, setShowMatchPlayModal] = useState(false);
   const [showGameStatusModal, setShowGameStatusModal] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
 
-  // Initialize player scores
+  // Initialize player scores and load saved game data
   useEffect(() => {
-    const initialScores = {};
-    players.forEach(player => {
-      initialScores[player.id] = {};
-      holes.forEach(hole => {
-        initialScores[player.id][hole.holeNumber] = player.isUser ? 
-          (scores[hole.holeNumber] || '') : '';
-      });
-    });
-    setPlayerScores(initialScores);
-  }, [players, holes]);
+    const initializeGame = async () => {
+      // Try to load existing game data
+      const savedGameData = await gamePersistenceService.loadGameData(round?.id);
+      
+      if (savedGameData && savedGameData.playerScores) {
+        // Use saved scores
+        setPlayerScores(savedGameData.playerScores);
+        console.log('✅ Loaded saved game data');
+      } else {
+        // Initialize new scores
+        const initialScores = {};
+        players.forEach(player => {
+          initialScores[player.id] = {};
+          holes.forEach(hole => {
+            initialScores[player.id][hole.holeNumber] = player.isUser ? 
+              (scores[hole.holeNumber] || '') : '';
+          });
+        });
+        setPlayerScores(initialScores);
+      }
+    };
+    
+    initializeGame();
+  }, [players, holes, round]);
 
   // Sync user's score with main scorecard
   useEffect(() => {
@@ -122,8 +140,20 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
       }
       
       setGameResults(results);
+      
+      // Save game data whenever results change
+      if (round?.id && results) {
+        const gameData = {
+          gameConfig,
+          players,
+          playerScores,
+          gameResults: results,
+          currentHole,
+        };
+        gamePersistenceService.saveGameData(round.id, gameData);
+      }
     }
-  }, [playerScores, gameConfig, players, holes]);
+  }, [playerScores, gameConfig, players, holes, round, currentHole]);
 
   const currentHoleData = holes.find(h => h.holeNumber === currentHole) || holes[0];
 
@@ -144,6 +174,27 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
       setScores(prev => ({ ...prev, [currentHole]: numValue }));
     }
   };
+
+  // Set up periodic sync to backend
+  useEffect(() => {
+    if (!round?.id || !token) return;
+
+    // Sync immediately when component mounts
+    const syncNow = async () => {
+      const success = await gamePersistenceService.syncGameToBackendWithQueue(token, round.id);
+      if (success) {
+        setLastSyncTime(new Date());
+      }
+    };
+    syncNow();
+
+    // Set up periodic sync every 30 seconds
+    const syncInterval = setInterval(() => {
+      syncNow();
+    }, 30000);
+
+    return () => clearInterval(syncInterval);
+  }, [round, token]);
 
   const adjustScore = (playerId, delta) => {
     const currentScore = playerScores[playerId]?.[currentHole] || currentHoleData.par;

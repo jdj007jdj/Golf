@@ -29,6 +29,7 @@ import userRoutes from '@/routes/userRoutes';
 import courseRoutes from '@/routes/courseRoutes';
 import roundRoutes from '@/routes/roundRoutes';
 import syncRoutes from '@/routes/syncRoutes';
+import gameRoutes from '@/routes/gameRoutes';
 
 /**
  * Create Express application
@@ -49,10 +50,27 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-app.use(cors({
-  origin: config.cors.origin,
+// Configure CORS - in development, allow any origin
+const corsOptions: cors.CorsOptions = {
   credentials: config.cors.credentials,
-}));
+  origin: (origin, callback) => {
+    // In development, allow any origin (including mobile apps)
+    if (config.nodeEnv === 'development') {
+      callback(null, true);
+    } else {
+      // In production, use the configured origins
+      const allowedOrigins = Array.isArray(config.cors.origin) ? config.cors.origin : [config.cors.origin];
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 
 /**
  * Rate limiting
@@ -104,6 +122,7 @@ app.use('/api/users', authMiddleware, userRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/rounds', roundRoutes);
 app.use('/api/sync', authMiddleware, syncRoutes);
+app.use('/api/games', authMiddleware, gameRoutes);
 
 /**
  * WebSocket setup

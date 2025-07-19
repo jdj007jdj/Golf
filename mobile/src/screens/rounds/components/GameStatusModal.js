@@ -7,12 +7,15 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  Share,
+  Alert,
 } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 const GameStatusModal = ({ visible, onClose, gameConfig, gameResults, players, holes, playerScores }) => {
   const [activeTab, setActiveTab] = useState('standings');
+  const totalPar = holes?.reduce((sum, hole) => sum + hole.par, 0) || 0;
 
   if (!gameConfig || !gameResults) return null;
 
@@ -44,6 +47,77 @@ const GameStatusModal = ({ visible, onClose, gameConfig, gameResults, players, h
         toPar: totalStrokes - holes.slice(0, holesPlayed).reduce((sum, h) => sum + h.par, 0),
       };
     }).sort((a, b) => a.totalStrokes - b.totalStrokes);
+  };
+
+  const generateExportText = () => {
+    let text = `${gameConfig.name} Game Results\n`;
+    text += `${new Date().toLocaleDateString()}\n\n`;
+
+    // Add standings
+    text += 'STANDINGS\n';
+    text += '---------\n';
+    
+    if (gameConfig.format === 'skins' && gameResults) {
+      players.forEach(player => {
+        const skinsWon = gameResults.skinsWon?.[player.id] || 0;
+        const value = skinsWon * (gameConfig.settings?.skinValue || 1);
+        text += `${player.name}: ${skinsWon} skins ($${value})\n`;
+      });
+      text += `\nCarried skins: ${gameResults.totalCarried || 0}\n`;
+    } else if (gameConfig.format === 'nassau' && gameResults && !gameResults.error) {
+      text += `Front 9: ${gameResults.front.status}\n`;
+      text += `Back 9: ${gameResults.back.status}\n`;
+      text += `Overall: ${gameResults.overall.status}\n`;
+    } else if (gameConfig.format === 'stableford' && gameResults) {
+      gameResults.leaderboard?.forEach((entry, index) => {
+        const player = players.find(p => p.id === entry.playerId);
+        text += `${index + 1}. ${player?.name}: ${entry.points} points\n`;
+      });
+    } else if (gameConfig.format === 'match' && gameResults && !gameResults.error) {
+      text += `${gameResults.status}\n`;
+      if (gameResults.winner) {
+        const winner = players.find(p => p.id === gameResults.winner);
+        text += `Winner: ${winner?.name}\n`;
+      }
+    } else if (gameConfig.format === 'stroke' && gameResults) {
+      gameResults.leaderboard?.forEach((entry, index) => {
+        const toPar = entry.toPar;
+        const parText = toPar === 0 ? 'E' : toPar > 0 ? `+${toPar}` : `${toPar}`;
+        text += `${index + 1}. ${entry.playerName}: ${entry.gross} (${parText})\n`;
+      });
+    }
+
+    // Add hole-by-hole scores
+    text += `\n\nHOLE-BY-HOLE SCORES\n`;
+    text += `-----------------\n`;
+    
+    holes.forEach(hole => {
+      text += `\nHole ${hole.holeNumber} (Par ${hole.par}):\n`;
+      players.forEach(player => {
+        const score = playerScores[player.id]?.[hole.holeNumber];
+        if (score) {
+          const diff = score - hole.par;
+          const diffText = diff === 0 ? '' : diff > 0 ? ` (+${diff})` : ` (${diff})`;
+          text += `  ${player.name}: ${score}${diffText}\n`;
+        }
+      });
+    });
+
+    return text;
+  };
+
+  const handleExport = async () => {
+    try {
+      const exportText = generateExportText();
+      
+      await Share.share({
+        message: exportText,
+        title: `${gameConfig.name} Game Results`,
+      });
+    } catch (error) {
+      Alert.alert('Export Failed', 'Unable to export game results');
+      console.error('Export error:', error);
+    }
   };
 
   const renderStandings = () => {
@@ -302,9 +376,14 @@ const GameStatusModal = ({ visible, onClose, gameConfig, gameResults, players, h
         <View style={styles.modalContent}>
           <View style={styles.header}>
             <Text style={styles.title}>Game Status</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Text style={styles.closeText}>✕</Text>
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity onPress={handleExport} style={styles.exportButton}>
+                <Text style={styles.exportText}>Export</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <Text style={styles.closeText}>✕</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.tabContainer}>
@@ -365,6 +444,22 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  exportButton: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  exportText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2e7d32',
   },
   title: {
     fontSize: 22,

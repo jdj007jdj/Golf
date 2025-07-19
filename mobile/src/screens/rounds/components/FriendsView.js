@@ -8,27 +8,52 @@ import {
   Alert,
 } from 'react-native';
 import { useScorecardContext } from '../contexts/ScorecardContext';
+import { useAuth } from '../../../contexts/AuthContext';
+import gamePersistenceService from '../../../services/gamePersistenceService';
 import AddPlayersModal from './AddPlayersModal';
 import GameSelectionModal from './GameSelectionModal';
 import GameScoringView from './GameScoringView';
 
 const FriendsView = () => {
   const { round, course } = useScorecardContext();
+  const { user } = useAuth();
   const [players, setPlayers] = useState([]);
   const [showAddPlayersModal, setShowAddPlayersModal] = useState(false);
   const [showGameSelectionModal, setShowGameSelectionModal] = useState(false);
   const [gameConfig, setGameConfig] = useState(null);
 
   // Initialize with the current user as a player
+  // Initialize players with the user and load saved game
   useEffect(() => {
-    setPlayers([{
-      id: 'user',
-      name: 'You',
-      handicap: 15, // TODO: Get from user profile
-      isUser: true,
-      scores: {},
-    }]);
-  }, []);
+    const initializePlayers = async () => {
+      // Try to load existing game data
+      if (round?.id) {
+        const savedGameData = await gamePersistenceService.loadGameData(round.id);
+        if (savedGameData) {
+          console.log('✅ Loaded saved game configuration');
+          if (savedGameData.gameConfig) {
+            setGameConfig(savedGameData.gameConfig);
+          }
+          if (savedGameData.players && savedGameData.players.length > 0) {
+            setPlayers(savedGameData.players);
+            return; // Use saved players instead of just the user
+          }
+        }
+      }
+      
+      // If no saved data, just add the user
+      setPlayers([{
+        id: 'user',
+        userId: user?.id,
+        name: 'You',
+        handicap: user?.handicap || 15,
+        isUser: true,
+        scores: {},
+      }]);
+    };
+    
+    initializePlayers();
+  }, [round]);
 
   const handleAddPlayers = (selectedFriends) => {
     const newPlayers = selectedFriends.map(friend => ({
@@ -69,8 +94,28 @@ const FriendsView = () => {
     setShowGameSelectionModal(true);
   };
 
-  const handleSelectGame = (config) => {
+  const handleSelectGame = async (config) => {
     setGameConfig(config);
+    
+    // Save the initial game data
+    if (round?.id) {
+      const initialGameData = {
+        gameConfig: config,
+        players,
+        playerScores: {},
+        gameResults: null,
+        startedAt: new Date().toISOString(),
+      };
+      
+      // Initialize empty scores for all players
+      players.forEach(player => {
+        initialGameData.playerScores[player.id] = {};
+      });
+      
+      await gamePersistenceService.saveGameData(round.id, initialGameData);
+      console.log('✅ Game data saved');
+    }
+    
     Alert.alert(
       'Game Started!', 
       `${config.name} game has been started with ${players.length} players.`,

@@ -33,6 +33,14 @@ export const API_CONFIG = {
       CONTRIBUTE: '/api/course-learning/contribute',
       DATA: '/api/course-learning/data',
       SYNC: '/api/sync/course-learning'
+    },
+    GAMES: {
+      CREATE: '/api/games',
+      GET: '/api/games',
+      UPDATE_SCORE: '/api/games',
+      COMPLETE: '/api/games',
+      HISTORY: '/api/games/history',
+      BY_ROUND: '/api/games/round'
     }
   }
 };

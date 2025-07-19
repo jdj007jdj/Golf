@@ -14,6 +14,7 @@ import {
 import shotTrackingService from '../../../services/shotTrackingService';
 import SmartClubSelector from '../../../components/SmartClubSelector';
 import clubService from '../../../services/clubService';
+import gamePersistenceService from '../../../services/gamePersistenceService';
 
 const { width } = Dimensions.get('window');
 
@@ -178,6 +179,16 @@ const ScorecardView = ({
   const finishRound = async () => {
     setIsSavingRound(true);
     try {
+      // Check if there's an active game to complete
+      if (round?.id) {
+        const gameData = await gamePersistenceService.loadGameData(round.id);
+        if (gameData && gameData.gameResults) {
+          // Complete the game and move to history
+          await gamePersistenceService.completeGame(round.id, gameData.gameResults);
+          console.log('✅ Game completed and moved to history');
+        }
+      }
+      
       // Navigate to round summary
       navigation.navigate('RoundSummary', {
         round: {

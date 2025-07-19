@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '../middleware/expressValidatorMiddleware';
 import { body, param, query } from 'express-validator';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 /**
  * GET / - List rounds for authenticated user with optional status filtering

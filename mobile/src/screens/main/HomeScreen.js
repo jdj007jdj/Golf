@@ -4,9 +4,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ActiveGamesCard from '../../components/ActiveGamesCard';
 
 const HomeScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
@@ -53,7 +55,8 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <ScrollView>
+        <View style={styles.header}>
         <Text style={styles.title}>Welcome, {user?.firstName}!</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity 
@@ -124,6 +127,9 @@ const HomeScreen = ({ navigation }) => {
           <Text style={styles.label}>Username: {user?.username}</Text>
         </View>
       </View>
+        
+      <ActiveGamesCard navigation={navigation} />
+    </ScrollView>
     </View>
   );
 };
