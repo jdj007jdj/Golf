@@ -105,6 +105,8 @@ const FriendsView = () => {
         playerScores: {},
         gameResults: null,
         startedAt: new Date().toISOString(),
+        courseName: course?.name || 'Unknown Course',
+        courseId: course?.id,
       };
       
       // Initialize empty scores for all players

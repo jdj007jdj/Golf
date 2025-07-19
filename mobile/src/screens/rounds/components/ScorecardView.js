@@ -50,9 +50,25 @@ const ScorecardView = ({
   const [selectingForShot, setSelectingForShot] = useState(null);
   const [showClubReminders, setShowClubReminders] = useState(settings?.scorecard?.showClubReminders ?? true);
   const [clubTrackingDisabledForRound, setClubTrackingDisabledForRound] = useState(false);
+  const [animationTimeouts, setAnimationTimeouts] = useState([]);
   
   // Get GPS tracking setting from settings context
   const isShotTrackingEnabled = settings?.shotTracking?.enabled ?? true;
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    console.log('[ScorecardView] Component mounting');
+    
+    return () => {
+      console.log('[ScorecardView] Component unmounting - cleaning up timeouts');
+      console.log('[ScorecardView] Modal states on unmount:', {
+        showSmartClubSelector,
+        selectingForShot,
+        animationTimeouts: animationTimeouts.length
+      });
+      animationTimeouts.forEach(timeout => clearTimeout(timeout));
+    };
+  }, [animationTimeouts]);
 
   // Initialize shot tracking service and club service
   useEffect(() => {
@@ -120,10 +136,12 @@ const ScorecardView = ({
       // Auto-open club selector if no club selected for this shot yet
       if (!currentShotClub) {
         // Automatically open club selector for this shot
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
           setShowSmartClubSelector(true);
           setSelectingForShot(newScore);
         }, 300); // Small delay to let score animation complete
+        
+        setAnimationTimeouts(prev => [...prev, timeout]);
       }
     }
     
@@ -294,6 +312,9 @@ const ScorecardView = ({
 
   // Handle finish round
   const handleFinishRound = () => {
+    // Close any open modals first
+    setShowSmartClubSelector(false);
+    
     Alert.alert(
       'Finish Round',
       'Are you sure you want to finish this round?',

@@ -99,9 +99,14 @@ const ScorecardContainer = ({ route, navigation }) => {
 
   // Initialize component
   useEffect(() => {
+    console.log('[ScorecardContainer] Component mounting');
     loadScores();
     loadHistoricalData();
     loadCourseSettings();
+    
+    return () => {
+      console.log('[ScorecardContainer] Component unmounting');
+    };
   }, []);
 
   // Save scores to AsyncStorage whenever scores change
@@ -266,6 +271,13 @@ const ScorecardContainer = ({ route, navigation }) => {
     );
   }
 
+  console.log('[ScorecardContainer] Rendering with props:', {
+    round: round?.id,
+    course: course?.id,
+    isLoading,
+    hasScores: Object.keys(scores).length > 0
+  });
+
   return (
     <ScorecardProvider value={sharedProps}>
       <View style={styles.container}>
@@ -282,6 +294,12 @@ const ScorecardContainer = ({ route, navigation }) => {
             tabBarIndicatorStyle: { backgroundColor: '#2e7d32' },
             tabBarStyle: { backgroundColor: '#fff' },
             tabBarLabelStyle: { fontSize: 16, fontWeight: 'bold' },
+            animationEnabled: false, // Disable animations to prevent view hierarchy issues
+          }}
+          screenListeners={{
+            state: (e) => {
+              console.log('[ScorecardContainer] Tab navigation state changed:', e.data.state);
+            },
           }}
         >
           <Tab.Screen 

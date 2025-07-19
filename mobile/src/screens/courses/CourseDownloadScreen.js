@@ -9,25 +9,29 @@ import {
   Alert,
   Modal,
   Dimensions,
+  Platform,
 } from 'react-native';
 import CleanMapView from '../../components/CleanMapView';
 import persistentTileCache from '../../utils/persistentTileCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { latLonToTile, getTileKey, tileToBounds, getMapTilerUrl } from '../../utils/tileCalculations';
 import { MAP_CONFIG } from '../../config/mapConfig';
+import Geolocation from 'react-native-geolocation-service';
+import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const CourseDownloadScreen = ({ route, navigation }) => {
-  const { course, courseCenter } = route.params;
+  const { course } = route.params;
   const [selectedTiles, setSelectedTiles] = useState(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [basePosition, setBasePosition] = useState({
-    center: [courseCenter.longitude, courseCenter.latitude],
+    center: [0, 0], // Will be updated with user location or course center
     zoom: 15, // Display at zoom 15 for overview
   });
+  const [locationLoading, setLocationLoading] = useState(true);
   const [mapBounds, setMapBounds] = useState(null);
   const [tileOverlays, setTileOverlays] = useState([]);
   const [mode, setMode] = useState('pan'); // 'pan' or 'select'
@@ -50,10 +54,84 @@ const CourseDownloadScreen = ({ route, navigation }) => {
     };
   };
 
-  // Update map bounds when component mounts
+  // Get user location on mount
   useEffect(() => {
-    const bounds = calculateMapBounds(basePosition.center, basePosition.zoom);
-    setMapBounds(bounds);
+    const initializeLocation = async () => {
+      try {
+        // Check if course has valid coordinates
+        if (course.latitude && course.longitude) {
+          setBasePosition({
+            center: [parseFloat(course.longitude), parseFloat(course.latitude)],
+            zoom: 15
+          });
+          setLocationLoading(false);
+          return;
+        }
+
+        // No course coordinates, get user location
+        const permission = Platform.OS === 'ios' 
+          ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE 
+          : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION;
+        
+        const result = await request(permission);
+        
+        if (result === RESULTS.GRANTED) {
+          Geolocation.getCurrentPosition(
+            (position) => {
+              setBasePosition({
+                center: [position.coords.longitude, position.coords.latitude],
+                zoom: 15
+              });
+              setLocationLoading(false);
+            },
+            (error) => {
+              console.error('Location error:', error);
+              // Fallback to a default location (not Augusta)
+              Alert.alert(
+                'Location Error',
+                'Unable to get your location. Please move the map to your course location.',
+                [{ text: 'OK' }]
+              );
+              // Default to a neutral location (0,0) which user can pan from
+              setBasePosition({
+                center: [0, 0],
+                zoom: 2
+              });
+              setLocationLoading(false);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 10000
+            }
+          );
+        } else {
+          Alert.alert(
+            'Location Permission',
+            'Location permission is required to center the map on your position.',
+            [{ text: 'OK' }]
+          );
+          setBasePosition({
+            center: [0, 0],
+            zoom: 2
+          });
+          setLocationLoading(false);
+        }
+      } catch (error) {
+        console.error('Initialize location error:', error);
+        setLocationLoading(false);
+      }
+    };
+
+    initializeLocation();
+  }, [course]);
+
+  // Update map bounds when position changes
+  useEffect(() => {
+    if (basePosition.center[0] !== 0 || basePosition.center[1] !== 0) {
+      const bounds = calculateMapBounds(basePosition.center, basePosition.zoom);
+      setMapBounds(bounds);
+    }
   }, [basePosition]);
 
   // Update tile overlays when selection changes
@@ -284,6 +362,24 @@ const CourseDownloadScreen = ({ route, navigation }) => {
       setShowProgressModal(false);
     }
   };
+
+  if (locationLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Download Course Maps</Text>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2e7d32" />
+          <Text style={styles.loadingText}>Getting your location...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -626,6 +722,16 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#666',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
     color: '#666',
   },
 });

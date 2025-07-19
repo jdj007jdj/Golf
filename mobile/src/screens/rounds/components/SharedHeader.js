@@ -13,7 +13,39 @@ const SharedHeader = ({ navigation, onSettingsPress, title }) => {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            console.log('[SharedHeader] Back button pressed');
+            console.log('[SharedHeader] Current route:', navigation.getState()?.routes?.[navigation.getState()?.index]?.name);
+            console.log('[SharedHeader] Navigation state:', JSON.stringify(navigation.getState(), null, 2));
+            
+            // Use requestAnimationFrame to defer navigation
+            requestAnimationFrame(() => {
+              try {
+                console.log('[SharedHeader] Attempting navigation.goBack()');
+                // Use a small timeout to ensure all view updates are complete
+                setTimeout(() => {
+                  if (navigation.canGoBack()) {
+                    navigation.goBack();
+                    console.log('[SharedHeader] navigation.goBack() completed');
+                  } else {
+                    console.log('[SharedHeader] Cannot go back, navigating to Home');
+                    navigation.navigate('Home');
+                  }
+                }, 100);
+              } catch (error) {
+                console.error('[SharedHeader] Navigation error:', error);
+                console.error('[SharedHeader] Error stack:', error.stack);
+                // Fallback navigation
+                console.log('[SharedHeader] Attempting fallback navigation.reset()');
+                setTimeout(() => {
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Home' }],
+                  });
+                }, 100);
+              }
+            });
+          }}
         >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>

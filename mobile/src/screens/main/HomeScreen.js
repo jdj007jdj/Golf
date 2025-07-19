@@ -71,9 +71,9 @@ const HomeScreen = ({ navigation }) => {
         </View>
       </View>
       
+      <ActiveGamesCard navigation={navigation} />
+      
       <View style={styles.content}>
-        <Text style={styles.welcomeText}>Ready to play?</Text>
-        
         {activeRound && (
           <TouchableOpacity 
             style={styles.resumeButton}
@@ -95,13 +95,6 @@ const HomeScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
         
-        <TouchableOpacity 
-          style={[styles.testButton]}
-          onPress={() => navigation.navigate('TestMap')}
-        >
-          <Text style={styles.testButtonText}>🧪 Test MapTiler</Text>
-        </TouchableOpacity>
-        
         <View style={styles.quickActions}>
           <TouchableOpacity 
             style={styles.actionCard}
@@ -119,16 +112,7 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.actionDescription}>Track your progress</Text>
           </TouchableOpacity>
         </View>
-        
-        <View style={styles.userInfo}>
-          <Text style={styles.sectionTitle}>Profile</Text>
-          <Text style={styles.label}>Name: {user?.firstName} {user?.lastName}</Text>
-          <Text style={styles.label}>Email: {user?.email}</Text>
-          <Text style={styles.label}>Username: {user?.username}</Text>
-        </View>
       </View>
-        
-      <ActiveGamesCard navigation={navigation} />
     </ScrollView>
     </View>
   );
@@ -179,14 +163,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
-  },
-  welcomeText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-    marginTop: 30,
-    marginBottom: 40,
   },
   primaryButton: {
     backgroundColor: '#2e7d32',
@@ -267,40 +243,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#4caf50',
     fontStyle: 'italic',
-  },
-  userInfo: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  label: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  testButton: {
-    backgroundColor: '#ff9800',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  testButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
 

@@ -26,10 +26,18 @@ const ActiveGamesCard = ({ navigation }) => {
       for (const roundId of activeGameIds) {
         const gameData = await gamePersistenceService.loadGameData(roundId);
         if (gameData) {
-          // Try to get round info
-          const roundsData = await AsyncStorage.getItem('golf_round_history');
-          const rounds = roundsData ? JSON.parse(roundsData) : [];
-          const round = rounds.find(r => r.id === roundId);
+          // Use courseName from gameData first, then try to get from round history
+          let courseName = gameData.courseName;
+          let date = gameData.startedAt;
+          
+          if (!courseName) {
+            // Fallback to round history if courseName not in gameData
+            const roundsData = await AsyncStorage.getItem('golf_round_history');
+            const rounds = roundsData ? JSON.parse(roundsData) : [];
+            const round = rounds.find(r => r.id === roundId);
+            courseName = round?.courseName || 'Unknown Course';
+            date = round?.date || gameData.startedAt;
+          }
 
           games.push({
             roundId,
@@ -37,8 +45,8 @@ const ActiveGamesCard = ({ navigation }) => {
             players: gameData.players,
             startedAt: gameData.startedAt,
             lastUpdated: gameData.lastUpdated,
-            courseName: round?.courseName || 'Unknown Course',
-            date: round?.date || gameData.startedAt,
+            courseName,
+            date,
           });
         }
       }
@@ -149,7 +157,6 @@ const ActiveGamesCard = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Active Games</Text>
       <FlatList
         data={activeGames}
         renderItem={renderGame}
@@ -166,13 +173,6 @@ const ActiveGamesCard = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     marginVertical: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-    paddingHorizontal: 16,
   },
   listContent: {
     paddingHorizontal: 12,

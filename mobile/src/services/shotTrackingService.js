@@ -39,12 +39,9 @@ class ShotTrackingService {
       await this.loadShots();
       console.log('Loaded shots:', this.currentRoundShots.shots.length);
       
-      // Add demo shots at Augusta National for testing
+      // Don't add demo shots - start with empty shot collection
       if (this.currentRoundShots.shots.length === 0) {
-        console.log('No shots found, adding demo shots');
-        await this.addDemoShots();
-      } else {
-        console.log('Found existing shots, not adding demo shots');
+        console.log('Starting with no shots');
       }
       
       // Process existing shots through course knowledge if we have a course ID

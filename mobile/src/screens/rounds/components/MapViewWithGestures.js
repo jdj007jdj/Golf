@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import MapLibreGL from '@maplibre/maplibre-react-native';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import Geolocation from 'react-native-geolocation-service';
 import { MAP_CONFIG } from '../../../config/mapConfig';
 import TileImage from '../../../components/TileImage';
 import persistentTileCache from '../../../utils/persistentTileCache';
@@ -35,6 +36,17 @@ const CourseMapView = React.memo(({
   settings 
 }) => {
   console.log('🗺️ MapViewWithGestures: Component mounting');
+  
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  
+  useEffect(() => {
+    console.log('🗺️ MapViewWithGestures: Setting up component lifecycle');
+    return () => {
+      console.log('🗺️ MapViewWithGestures: Component unmounting - cleaning up');
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // State management
   const [loading, setLoading] = useState(true);
@@ -43,7 +55,7 @@ const CourseMapView = React.memo(({
   const [mapReady, setMapReady] = useState(false);
   const [tiles, setTiles] = useState([]);
   const [basePosition, setBasePosition] = useState({ 
-    center: centerCoordinate || [-82.0206, 33.5031], 
+    center: centerCoordinate || [0, 0], // Temporary until we get user location
     zoom: 18 
   });
   const [cacheStats, setCacheStats] = useState(null);
@@ -58,13 +70,13 @@ const CourseMapView = React.memo(({
     basePositionRef.current = basePosition;
   }, [basePosition]);
   
-  // Update basePosition when centerCoordinate changes
+  // Update basePosition when centerCoordinate changes (only if we don't have user location)
   useEffect(() => {
-    if (centerCoordinate && (!basePosition.center || basePosition.center.length === 0)) {
+    if (centerCoordinate && basePosition.center[0] === 0 && basePosition.center[1] === 0) {
       console.log(`📍 Setting basePosition.center to centerCoordinate:`, centerCoordinate);
       setBasePosition({ center: centerCoordinate, zoom: 18 });
     }
-  }, [centerCoordinate, basePosition.center]);
+  }, [centerCoordinate]);
   
   // Refs
   const mapRef = useRef(null);
@@ -83,10 +95,10 @@ const CourseMapView = React.memo(({
 
   const currentHoleData = holes.find(hole => hole.holeNumber === currentHole) || holes[0];
 
-  // Default center coordinates - ensure we always have a valid value
+  // Default center coordinates - will be updated with user location
   const centerCoordinate = course && course.latitude && course.longitude
     ? [parseFloat(course.longitude), parseFloat(course.latitude)]
-    : [-82.0206, 33.5031]; // Augusta National
+    : null; // Don't default to Augusta
 
   // Create a transparent overlay to capture gestures
   const panResponder = useRef(
@@ -305,9 +317,53 @@ const CourseMapView = React.memo(({
           if (result === RESULTS.GRANTED) {
             setHasLocationPermission(true);
             console.log('✅ Location permission granted');
+            
+            // Get current location
+            Geolocation.getCurrentPosition(
+              (position) => {
+                const { latitude, longitude } = position.coords;
+                console.log('📍 Got user location:', latitude, longitude);
+                
+                // Update base position with user location if we don't have course coordinates
+                if (!centerCoordinate) {
+                  setBasePosition({
+                    center: [longitude, latitude],
+                    zoom: 18
+                  });
+                }
+                
+                setUserLocation({
+                  latitude,
+                  longitude,
+                  accuracy: position.coords.accuracy
+                });
+              },
+              (error) => {
+                console.error('❌ Error getting location:', error);
+                // Fall back to course location or a default
+                if (centerCoordinate) {
+                  setBasePosition({
+                    center: centerCoordinate,
+                    zoom: 18
+                  });
+                }
+              },
+              {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 10000
+              }
+            );
           } else {
             setHasLocationPermission(false);
             console.log('❌ Location permission denied');
+            // Use course location if available
+            if (centerCoordinate) {
+              setBasePosition({
+                center: centerCoordinate,
+                zoom: 18
+              });
+            }
           }
         }
       } catch (error) {

@@ -154,11 +154,7 @@ const CourseDetailsScreen = ({ route, navigation }) => {
         <TouchableOpacity 
           style={styles.downloadButton}
           onPress={() => navigation.navigate('CourseDownload', { 
-            course: course,
-            courseCenter: {
-              latitude: course.latitude || 33.5031, // Default to Augusta if no coordinates
-              longitude: course.longitude || -82.0206
-            }
+            course: course
           })}
         >
           <Text style={styles.downloadIcon}>📥</Text>
