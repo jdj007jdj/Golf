@@ -40,6 +40,8 @@ model User {
   createdFeatures      CourseFeature[] @relation("FeatureCreator")
   recordedPinPositions PinPosition[] @relation("PinRecorder")
   clubPerformances     ClubPerformance[] @relation("UserClubPerformance")
+  localFriends         LocalFriend[]
+  linkedAsLocalFriend  LocalFriend[] @relation("LinkedLocalFriend")
 
   @@map("users")
 }
@@ -215,6 +217,7 @@ model Round {
   course       Course             @relation(fields: [courseId], references: [id])
   teeBox       TeeBox             @relation(fields: [teeBoxId], references: [id])
   participants RoundParticipant[]
+  games        Game[]
 
   @@map("rounds")
 }
@@ -222,7 +225,9 @@ model Round {
 model RoundParticipant {
   id              String @id @default(uuid()) @db.Uuid
   roundId         String @map("round_id") @db.Uuid
-  userId          String @map("user_id") @db.Uuid
+  userId          String? @map("user_id") @db.Uuid // nullable for guest players
+  guestName       String? @map("guest_name") // for non-app users
+  guestHandicap   Int?   @map("guest_handicap") // for non-app users
   isScorer        Boolean @default(false) @map("is_scorer")
   playingHandicap Int?   @map("playing_handicap")
   teeBoxId        String @map("tee_box_id") @db.Uuid
@@ -230,10 +235,11 @@ model RoundParticipant {
 
   // Relations
   round      Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
   teeBox     TeeBox      @relation(fields: [teeBoxId], references: [id])
   holeScores HoleScore[]
   shots      Shot[]      @relation("ParticipantShots")
+  gameScores GameScore[] // for games like skins, nassau, etc.
 
   @@unique([roundId, userId])
   @@map("round_participants")
@@ -356,4 +362,63 @@ model CourseRecommendation {
   hole Hole @relation("HoleRecommendations", fields: [holeId], references: [id], onDelete: Cascade)
 
   @@map("course_recommendations")
+}
+
+// Game models for tracking games with friends
+model Game {
+  id         String   @id @default(uuid()) @db.Uuid
+  roundId    String   @map("round_id") @db.Uuid
+  gameType   String   @map("game_type") // skins, nassau, stableford, match, stroke
+  settings   Json     // game-specific settings (e.g., skins carry over, point values)
+  status     String   @default("active") // active, completed, cancelled
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  round      Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  gameScores GameScore[]
+
+  @@map("games")
+}
+
+model GameScore {
+  id                 String   @id @default(uuid()) @db.Uuid
+  gameId             String   @map("game_id") @db.Uuid
+  roundParticipantId String   @map("round_participant_id") @db.Uuid
+  holeNumber         Int      @map("hole_number")
+  scoreData          Json     @map("score_data") // flexible for different game types
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  game             Game             @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  roundParticipant RoundParticipant @relation(fields: [roundParticipantId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, roundParticipantId, holeNumber])
+  @@map("game_scores")
+}
+
+// Local friends storage (for app-side only, not synced)
+model LocalFriend {
+  id             String   @id @default(uuid()) @db.Uuid
+  ownerId        String   @map("owner_id") @db.Uuid
+  name           String
+  nickname       String?
+  email          String?
+  phone          String?
+  handicap       Int?
+  linkedUserId   String?  @map("linked_user_id") @db.Uuid // if they join the app later
+  isFavorite     Boolean  @default(false) @map("is_favorite")
+  lastPlayedAt   DateTime? @map("last_played_at")
+  roundsPlayed   Int      @default(0) @map("rounds_played")
+  averageScore   Float?   @map("average_score")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  owner      User  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  linkedUser User? @relation("LinkedLocalFriend", fields: [linkedUserId], references: [id])
+
+  @@map("local_friends")
 }

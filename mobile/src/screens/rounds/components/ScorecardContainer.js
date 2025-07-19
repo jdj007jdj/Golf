@@ -24,6 +24,7 @@ import {
 import AchievementPopup from '../../../components/AchievementPopup';
 import ScorecardView from './ScorecardView';
 import CourseMapView from './MapViewWithGestures';
+import FriendsView from './FriendsView';
 import SharedHeader from './SharedHeader';
 import { ScorecardProvider, useScorecardContext } from '../contexts/ScorecardContext';
 
@@ -58,6 +59,10 @@ const MapTab = React.memo(() => {
 const ScorecardTab = React.memo(() => {
   const contextValue = useScorecardContext();
   return <ScorecardView {...contextValue} />;
+});
+
+const FriendsTab = React.memo(() => {
+  return <FriendsView />;
 });
 
 const ScorecardContainer = ({ route, navigation }) => {
@@ -279,6 +284,10 @@ const ScorecardContainer = ({ route, navigation }) => {
             tabBarLabelStyle: { fontSize: 16, fontWeight: 'bold' },
           }}
         >
+          <Tab.Screen 
+            name="Friends"
+            component={FriendsTab}
+          />
           <Tab.Screen 
             name="Score"
             component={ScorecardTab}
