@@ -9,6 +9,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { useScorecardContext } from '../contexts/ScorecardContext';
+import gameCalculationService from '../../../services/gameCalculationService';
+import NassauStatusModal from './NassauStatusModal';
+import StablefordLeaderboardModal from './StablefordLeaderboardModal';
+import MatchPlayStatusModal from './MatchPlayStatusModal';
+import GameStatusModal from './GameStatusModal';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -25,6 +30,11 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
   
   const [playerScores, setPlayerScores] = useState({});
   const [editingPlayer, setEditingPlayer] = useState(null);
+  const [gameResults, setGameResults] = useState(null);
+  const [showNassauModal, setShowNassauModal] = useState(false);
+  const [showStablefordModal, setShowStablefordModal] = useState(false);
+  const [showMatchPlayModal, setShowMatchPlayModal] = useState(false);
+  const [showGameStatusModal, setShowGameStatusModal] = useState(false);
 
   // Initialize player scores
   useEffect(() => {
@@ -61,6 +71,59 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
       }));
     }
   }, [scores, currentHole]);
+
+  // Calculate game results whenever scores change
+  useEffect(() => {
+    if (gameConfig && playerScores && Object.keys(playerScores).length > 0) {
+      let results = null;
+      
+      switch (gameConfig.format) {
+        case 'skins':
+          results = gameCalculationService.calculateSkins(
+            playerScores,
+            players,
+            holes,
+            gameConfig.settings
+          );
+          break;
+        case 'nassau':
+          results = gameCalculationService.calculateNassau(
+            playerScores,
+            players,
+            holes,
+            gameConfig.settings
+          );
+          break;
+        case 'stableford':
+          results = gameCalculationService.calculateStableford(
+            playerScores,
+            players,
+            holes,
+            gameConfig.settings
+          );
+          break;
+        case 'match':
+          results = gameCalculationService.calculateMatchPlay(
+            playerScores,
+            players,
+            holes,
+            gameConfig.settings
+          );
+          break;
+        case 'stroke':
+          results = gameCalculationService.calculateStrokePlay(
+            playerScores,
+            players,
+            holes,
+            gameConfig.settings
+          );
+          break;
+        // Add other game formats as needed
+      }
+      
+      setGameResults(results);
+    }
+  }, [playerScores, gameConfig, players, holes]);
 
   const currentHoleData = holes.find(h => h.holeNumber === currentHole) || holes[0];
 
@@ -123,12 +186,107 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
     const isEditing = editingPlayer === player.id;
     const scoreColor = getScoreColor(score, currentHoleData.par);
     const scoreStatus = getScoreStatus(score, currentHoleData.par);
+    
+    // Get game-specific info for this player
+    let gameInfo = null;
+    if (gameResults && gameConfig) {
+      if (gameConfig.format === 'skins') {
+        const skinsWon = gameResults.skinsWon?.[player.id] || 0;
+        const isHoleWinner = gameResults.holeWinners?.[currentHole] === player.id;
+        gameInfo = { skinsWon, isHoleWinner };
+      } else if (gameConfig.format === 'nassau' && !gameResults.error) {
+        const currentSegment = currentHole <= 9 ? gameResults.front : gameResults.back;
+        const holesWon = currentSegment.holesWon?.[player.id] || 0;
+        const overallWon = gameResults.overall.holesWon?.[player.id] || 0;
+        const isHoleWinner = gameResults.holeResults?.[currentHole] === player.id;
+        gameInfo = { 
+          segmentHolesWon: holesWon,
+          overallHolesWon: overallWon,
+          isHoleWinner,
+          currentSegmentStatus: currentSegment.status
+        };
+      } else if (gameConfig.format === 'stableford') {
+        const totalPoints = gameResults.playerPoints?.[player.id] || 0;
+        const holePoints = gameResults.holePoints?.[currentHole]?.[player.id] || 0;
+        const position = gameResults.leaderboard?.findIndex(p => p.playerId === player.id) + 1 || 0;
+        gameInfo = { 
+          totalPoints,
+          holePoints,
+          position,
+          isLeader: position === 1 && totalPoints > 0
+        };
+      } else if (gameConfig.format === 'match' && !gameResults.error) {
+        const isPlayer1 = player.id === players[0].id;
+        const holesWon = isPlayer1 ? gameResults.player1Holes : gameResults.player2Holes;
+        const isHoleWinner = gameResults.holeResults?.[currentHole] === player.id;
+        const isLeader = gameResults.leader === player.id;
+        const isWinner = gameResults.winner === player.id;
+        gameInfo = { 
+          holesWon,
+          isHoleWinner,
+          isLeader,
+          isWinner,
+          matchStatus: gameResults.status,
+          strokesReceived: gameResults.strokeReceiver === player.id ? gameResults.handicapStrokes : 0
+        };
+      } else if (gameConfig.format === 'stroke') {
+        const totals = gameResults.playerTotals?.[player.id];
+        const position = gameResults.leaderboard?.findIndex(p => p.playerId === player.id) + 1 || 0;
+        gameInfo = {
+          gross: totals?.gross || 0,
+          toPar: totals?.toPar || 0,
+          position,
+          isLeader: position === 1 && totals?.gross > 0
+        };
+      }
+      // Add other game format info as needed
+    }
 
     return (
-      <View key={player.id} style={styles.playerRow}>
+      <View key={player.id} style={[
+        styles.playerRow,
+        gameInfo?.isHoleWinner && styles.winnerRow
+      ]}>
         <View style={styles.playerInfo}>
-          <Text style={styles.playerName}>{player.name}</Text>
-          <Text style={styles.playerHandicap}>HCP {player.handicap || 'N/A'}</Text>
+          <Text style={styles.playerName}>
+            {player.name}
+            {gameInfo?.isHoleWinner && ' 🏆'}
+            {gameInfo?.isLeader && gameConfig.format !== 'match' && ' 👑'}
+            {gameInfo?.isWinner && ' 🏆👑'}
+          </Text>
+          <View style={styles.playerStatsRow}>
+            <Text style={styles.playerHandicap}>HCP {player.handicap || 'N/A'}</Text>
+            {gameInfo && gameConfig.format === 'skins' && gameInfo.skinsWon > 0 && (
+              <Text style={styles.skinsCount}>Skins: {gameInfo.skinsWon}</Text>
+            )}
+            {gameInfo && gameConfig.format === 'nassau' && (
+              <Text style={styles.nassauCount}>
+                {currentHole <= 9 ? 'F9' : 'B9'}: {gameInfo.segmentHolesWon} | Total: {gameInfo.overallHolesWon}
+              </Text>
+            )}
+            {gameInfo && gameConfig.format === 'stableford' && (
+              <Text style={styles.stablefordCount}>
+                Points: {gameInfo.totalPoints} {gameInfo.position > 0 && `(#${gameInfo.position})`}
+              </Text>
+            )}
+            {gameInfo && gameConfig.format === 'match' && (
+              <View style={styles.matchStatsContainer}>
+                <Text style={styles.matchCount}>
+                  Holes Won: {gameInfo.holesWon}
+                </Text>
+                {gameInfo.strokesReceived > 0 && (
+                  <Text style={styles.matchHandicap}>
+                    ({gameInfo.strokesReceived} strokes)
+                  </Text>
+                )}
+              </View>
+            )}
+            {gameInfo && gameConfig.format === 'stroke' && (
+              <Text style={styles.strokeCount}>
+                Total: {gameInfo.gross} {gameInfo.toPar !== 0 && `(${gameInfo.toPar > 0 ? '+' : ''}${gameInfo.toPar})`}
+              </Text>
+            )}
+          </View>
         </View>
 
         <View style={styles.scoreSection}>
@@ -162,6 +320,11 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
             {score && scoreStatus && (
               <Text style={[styles.scoreStatus, { color: scoreColor }]}>
                 {scoreStatus}
+              </Text>
+            )}
+            {score && gameInfo && gameConfig.format === 'stableford' && gameInfo.holePoints > 0 && (
+              <Text style={styles.holePoints}>
+                +{gameInfo.holePoints} pts
               </Text>
             )}
           </TouchableOpacity>
@@ -209,11 +372,63 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
 
       {/* Game Info Bar */}
       <View style={styles.gameInfoBar}>
-        <Text style={styles.gameType}>{gameConfig.name}</Text>
-        {gameConfig.format === 'skins' && (
-          <Text style={styles.gameStatus}>
-            ${gameConfig.settings.skinValue} per hole
-          </Text>
+        <View style={styles.gameInfoLeft}>
+          <Text style={styles.gameType}>{gameConfig.name}</Text>
+          {gameConfig.format === 'skins' && gameResults && (
+            <Text style={styles.gameStatus}>
+              {gameResults.totalCarried > 0 
+                ? `${gameResults.totalCarried} skin${gameResults.totalCarried > 1 ? 's' : ''} carried`
+                : `$${gameConfig.settings.skinValue} per skin`
+              }
+            </Text>
+          )}
+          {gameConfig.format === 'nassau' && gameResults && !gameResults.error && (
+            <Text style={styles.gameStatus}>
+              {currentHole <= 9 
+                ? `Front: ${gameResults.front.status}`
+                : `Back: ${gameResults.back.status}`
+              }
+            </Text>
+          )}
+          {gameConfig.format === 'stableford' && gameResults && (
+            <Text style={styles.gameStatus}>
+              Leader: {gameResults.leaderboard?.[0]?.points || 0} points
+            </Text>
+          )}
+          {gameConfig.format === 'match' && gameResults && !gameResults.error && (
+            <Text style={styles.gameStatus}>
+              {gameResults.status} {gameResults.thru > 0 && !gameResults.matchClosed && `(thru ${gameResults.thru})`}
+            </Text>
+          )}
+          {gameConfig.format === 'stroke' && gameResults && (
+            <Text style={styles.gameStatus}>
+              Leader: {gameResults.leaderboard?.[0]?.gross || 0} strokes
+            </Text>
+          )}
+        </View>
+        {gameConfig.format === 'nassau' && gameResults && !gameResults.error && (
+          <TouchableOpacity 
+            style={styles.statusButton}
+            onPress={() => setShowNassauModal(true)}
+          >
+            <Text style={styles.statusButtonText}>View All</Text>
+          </TouchableOpacity>
+        )}
+        {gameConfig.format === 'stableford' && gameResults && (
+          <TouchableOpacity 
+            style={styles.statusButton}
+            onPress={() => setShowStablefordModal(true)}
+          >
+            <Text style={styles.statusButtonText}>Leaderboard</Text>
+          </TouchableOpacity>
+        )}
+        {gameConfig.format === 'match' && gameResults && !gameResults.error && (
+          <TouchableOpacity 
+            style={styles.statusButton}
+            onPress={() => setShowMatchPlayModal(true)}
+          >
+            <Text style={styles.statusButtonText}>Details</Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -222,6 +437,14 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
         {players.map(renderPlayerScoreRow)}
       </ScrollView>
 
+      {/* Game Status Button */}
+      <TouchableOpacity 
+        style={styles.gameStatusButton}
+        onPress={() => setShowGameStatusModal(true)}
+      >
+        <Text style={styles.gameStatusButtonText}>View Full Game Status</Text>
+      </TouchableOpacity>
+
       {/* Hole Navigation Dots */}
       <ScrollView 
         horizontal 
@@ -229,24 +452,91 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
         style={styles.holeDotsContainer}
         contentContainerStyle={styles.holeDotsContent}
       >
-        {holes.map((hole) => (
-          <TouchableOpacity
-            key={hole.holeNumber}
-            style={[
-              styles.holeDot,
-              currentHole === hole.holeNumber && styles.holeDotActive
-            ]}
-            onPress={() => setCurrentHole(hole.holeNumber)}
-          >
-            <Text style={[
-              styles.holeDotText,
-              currentHole === hole.holeNumber && styles.holeDotTextActive
-            ]}>
-              {hole.holeNumber}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {holes.map((hole) => {
+          const isCarried = gameConfig?.format === 'skins' && 
+                           gameResults?.carriedHoles?.includes(hole.holeNumber);
+          
+          let holeWinnerIndicator = null;
+          if ((gameConfig?.format === 'nassau' || gameConfig?.format === 'match') && gameResults?.holeResults) {
+            const winner = gameResults.holeResults[hole.holeNumber];
+            if (winner && winner !== 'halved') {
+              const winnerPlayer = players.find(p => p.id === winner);
+              holeWinnerIndicator = winnerPlayer?.isUser ? '●' : '○';
+            }
+          }
+          
+          return (
+            <TouchableOpacity
+              key={hole.holeNumber}
+              style={[
+                styles.holeDot,
+                currentHole === hole.holeNumber && styles.holeDotActive,
+                isCarried && styles.holeDotCarried
+              ]}
+              onPress={() => setCurrentHole(hole.holeNumber)}
+            >
+              <Text style={[
+                styles.holeDotText,
+                currentHole === hole.holeNumber && styles.holeDotTextActive
+              ]}>
+                {hole.holeNumber}
+              </Text>
+              {isCarried && (
+                <View style={styles.carriedIndicator} />
+              )}
+              {holeWinnerIndicator && (
+                <Text style={styles.holeWinnerIndicator}>{holeWinnerIndicator}</Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
+
+      {/* Nassau Status Modal */}
+      {gameConfig?.format === 'nassau' && (
+        <NassauStatusModal
+          visible={showNassauModal}
+          onClose={() => setShowNassauModal(false)}
+          gameResults={gameResults}
+          players={players}
+          gameConfig={gameConfig}
+        />
+      )}
+
+      {/* Stableford Leaderboard Modal */}
+      {gameConfig?.format === 'stableford' && (
+        <StablefordLeaderboardModal
+          visible={showStablefordModal}
+          onClose={() => setShowStablefordModal(false)}
+          gameResults={gameResults}
+          players={players}
+          gameConfig={gameConfig}
+          holes={holes}
+        />
+      )}
+
+      {/* Match Play Status Modal */}
+      {gameConfig?.format === 'match' && (
+        <MatchPlayStatusModal
+          visible={showMatchPlayModal}
+          onClose={() => setShowMatchPlayModal(false)}
+          gameResults={gameResults}
+          players={players}
+          gameConfig={gameConfig}
+          holes={holes}
+        />
+      )}
+
+      {/* Comprehensive Game Status Modal */}
+      <GameStatusModal
+        visible={showGameStatusModal}
+        onClose={() => setShowGameStatusModal(false)}
+        gameConfig={gameConfig}
+        gameResults={gameResults}
+        players={players}
+        holes={holes}
+        playerScores={playerScores}
+      />
     </View>
   );
 };
@@ -306,6 +596,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  gameInfoLeft: {
+    flex: 1,
+  },
   gameType: {
     fontSize: 16,
     fontWeight: '600',
@@ -314,6 +607,18 @@ const styles = StyleSheet.create({
   gameStatus: {
     fontSize: 14,
     color: '#fff',
+  },
+  statusButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 12,
+  },
+  statusButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
   },
   playersContainer: {
     flex: 1,
@@ -332,23 +637,70 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    gap: 12,
   },
   playerInfo: {
     flex: 1,
+    marginRight: 8,
   },
   playerName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
   },
+  playerStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 12,
+  },
   playerHandicap: {
     fontSize: 14,
     color: '#666',
-    marginTop: 2,
+  },
+  skinsCount: {
+    fontSize: 14,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  nassauCount: {
+    fontSize: 14,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  stablefordCount: {
+    fontSize: 14,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  matchStatsContainer: {
+    flexDirection: 'column',
+    gap: 2,
+  },
+  matchCount: {
+    fontSize: 14,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  matchHandicap: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  strokeCount: {
+    fontSize: 14,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  winnerRow: {
+    borderWidth: 2,
+    borderColor: '#ffd700',
+    backgroundColor: '#fffef0',
   },
   scoreSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
   },
   adjustButton: {
     width: 36,
@@ -383,6 +735,25 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textTransform: 'uppercase',
   },
+  holePoints: {
+    fontSize: 12,
+    marginTop: 2,
+    color: '#4caf50',
+    fontWeight: '600',
+  },
+  gameStatusButton: {
+    backgroundColor: '#2e7d32',
+    marginHorizontal: 16,
+    marginVertical: 12,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  gameStatusButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
   holeDotsContainer: {
     backgroundColor: '#fff',
     borderTopWidth: 1,
@@ -412,6 +783,25 @@ const styles = StyleSheet.create({
   },
   holeDotTextActive: {
     color: '#fff',
+  },
+  holeDotCarried: {
+    borderWidth: 2,
+    borderColor: '#ff9800',
+  },
+  carriedIndicator: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ff9800',
+  },
+  holeWinnerIndicator: {
+    position: 'absolute',
+    bottom: -8,
+    fontSize: 10,
+    color: '#2e7d32',
   },
 });
 

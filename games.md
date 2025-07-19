@@ -140,53 +140,53 @@ gameScores: {
 - [x] 2.5 Add "Start Game" functionality
 - [x] 2.6 Show selected game in Friends tab header
 
-### Phase 3: Basic Scoring Interface (Day 2)
-- [ ] 3.1 Redesign Friends tab to show all players
-- [ ] 3.2 Create score input for each player per hole
-- [ ] 3.3 Sync with main scorecard (user's score)
-- [ ] 3.4 Add quick score entry buttons (+/- for each player)
-- [ ] 3.5 Show current hole prominently
-- [ ] 3.6 Add swipe navigation between holes
+### Phase 3: Basic Scoring Interface (Day 2) ✅
+- [x] 3.1 Redesign Friends tab to show all players
+- [x] 3.2 Create score input for each player per hole
+- [x] 3.3 Sync with main scorecard (user's score)
+- [x] 3.4 Add quick score entry buttons (+/- for each player)
+- [x] 3.5 Show current hole prominently
+- [x] 3.6 Add swipe navigation between holes
 
-### Phase 4: Skins Game Implementation (Day 2-3)
-- [ ] 4.1 Create skins calculation logic
-- [ ] 4.2 Determine hole winners
-- [ ] 4.3 Implement carry-over logic
-- [ ] 4.4 Create skins status display
-- [ ] 4.5 Show skins won per player
-- [ ] 4.6 Add visual indicators for carried holes
+### Phase 4: Skins Game Implementation (Day 2-3) ✅
+- [x] 4.1 Create skins calculation logic
+- [x] 4.2 Determine hole winners
+- [x] 4.3 Implement carry-over logic
+- [x] 4.4 Create skins status display
+- [x] 4.5 Show skins won per player
+- [x] 4.6 Add visual indicators for carried holes
 
-### Phase 5: Nassau Implementation (Day 3)
-- [ ] 5.1 Create Nassau scoring logic
-- [ ] 5.2 Track match play status for each segment
-- [ ] 5.3 Calculate holes won/lost/tied
-- [ ] 5.4 Create Nassau status display
-- [ ] 5.5 Show "2 UP", "All Square", etc.
-- [ ] 5.6 Handle press/automatic press rules
+### Phase 5: Nassau Implementation (Day 3) ✅
+- [x] 5.1 Create Nassau scoring logic
+- [x] 5.2 Track match play status for each segment
+- [x] 5.3 Calculate holes won/lost/tied
+- [x] 5.4 Create Nassau status display
+- [x] 5.5 Show "2 UP", "All Square", etc.
+- [ ] 5.6 Handle press/automatic press rules (future enhancement)
 
-### Phase 6: Stableford Implementation (Day 3-4)
-- [ ] 6.1 Create Stableford points calculation
-- [ ] 6.2 Add configurable point values
-- [ ] 6.3 Handle handicap adjustments
-- [ ] 6.4 Create points leaderboard display
-- [ ] 6.5 Show points per hole breakdown
-- [ ] 6.6 Add modified Stableford option
+### Phase 6: Stableford Implementation (Day 3-4) ✅
+- [x] 6.1 Create Stableford points calculation
+- [x] 6.2 Add configurable point values
+- [x] 6.3 Handle handicap adjustments
+- [x] 6.4 Create points leaderboard display
+- [x] 6.5 Show points per hole breakdown
+- [ ] 6.6 Add modified Stableford option (future enhancement)
 
-### Phase 7: Match Play Implementation (Day 4)
-- [ ] 7.1 Create match play scoring logic
-- [ ] 7.2 Track match status and holes remaining
-- [ ] 7.3 Handle conceded holes
-- [ ] 7.4 Create match status display
-- [ ] 7.5 Show detailed match progress
-- [ ] 7.6 Add team match play support
+### Phase 7: Match Play Implementation (Day 4) ✅
+- [x] 7.1 Create match play scoring logic
+- [x] 7.2 Track match status and holes remaining
+- [ ] 7.3 Handle conceded holes (future enhancement)
+- [x] 7.4 Create match status display
+- [x] 7.5 Show detailed match progress
+- [ ] 7.6 Add team match play support (future enhancement)
 
-### Phase 8: Game Status & Leaderboard (Day 4-5)
-- [ ] 8.1 Create GameStatusModal component
-- [ ] 8.2 Design comprehensive leaderboard view
-- [ ] 8.3 Show game-specific standings
-- [ ] 8.4 Add detailed statistics per player
-- [ ] 8.5 Create end-of-round summary
-- [ ] 8.6 Add share functionality
+### Phase 8: Game Status & Leaderboard (Day 4-5) ✅
+- [x] 8.1 Create GameStatusModal component
+- [x] 8.2 Design comprehensive leaderboard view
+- [x] 8.3 Show game-specific standings
+- [x] 8.4 Add detailed statistics per player
+- [x] 8.5 Create end-of-round summary
+- [ ] 8.6 Add share functionality (future enhancement)
 
 ### Phase 9: Data Persistence (Day 5)
 - [ ] 9.1 Save game data to AsyncStorage
