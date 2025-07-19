@@ -58,6 +58,11 @@ const SettingsScreen = ({ navigation }) => {
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncInProgress, setSyncInProgress] = useState(false);
   
+  // GPS Shot Tracking Settings
+  const [isShotTrackingEnabled, setIsShotTrackingEnabled] = useState(
+    settings.shotTracking?.enabled ?? true
+  );
+  
 
   useEffect(() => {
     loadSettings();
@@ -189,6 +194,9 @@ const SettingsScreen = ({ navigation }) => {
           showClubSelection: false, // Future feature
           showAchievementNotifications,
           showSmartClubTracking,
+        },
+        shotTracking: {
+          enabled: isShotTrackingEnabled,
         },
       };
       
@@ -431,6 +439,29 @@ const SettingsScreen = ({ navigation }) => {
           {renderSwitch('Score Summary', showScoreSummary, setShowScoreSummary, 'Show running total and score to par')}
           {renderSwitch('Achievement Notifications', showAchievementNotifications, setShowAchievementNotifications, 'Show milestone alerts during rounds')}
           {renderSwitch('Smart Club Tracking', showSmartClubTracking, setShowSmartClubTracking, 'Track and recommend clubs during play')}
+        </View>
+
+        {/* GPS Shot Tracking Section */}
+        {renderSectionHeader('GPS Shot Tracking')}
+        <View style={styles.section}>
+          {renderSwitch(
+            'Enable GPS Shot Tracking', 
+            isShotTrackingEnabled, 
+            setIsShotTrackingEnabled, 
+            'Automatically log GPS coordinates with each shot for distance tracking and course learning'
+          )}
+          {isShotTrackingEnabled && (
+            <View style={styles.gpsInfoContainer}>
+              <Text style={styles.gpsInfoTitle}>Features enabled with GPS tracking:</Text>
+              <Text style={styles.gpsInfoItem}>• Shot distance measurements</Text>
+              <Text style={styles.gpsInfoItem}>• Club distance analytics</Text>
+              <Text style={styles.gpsInfoItem}>• Course learning (pin positions)</Text>
+              <Text style={styles.gpsInfoItem}>• Shot visualization on map</Text>
+              <Text style={styles.gpsInfoNote}>
+                Note: GPS tracking requires location permission and works best outdoors with clear sky view.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* App Preferences Section */}
@@ -966,6 +997,33 @@ const styles = StyleSheet.create({
   },
   syncDetailError: {
     color: '#D32F2F',
+  },
+  gpsInfoContainer: {
+    backgroundColor: '#F0F9FF',
+    padding: 16,
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0F2FE',
+  },
+  gpsInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0369A1',
+    marginBottom: 8,
+  },
+  gpsInfoItem: {
+    fontSize: 13,
+    color: '#0284C7',
+    marginBottom: 4,
+    marginLeft: 8,
+  },
+  gpsInfoNote: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });
 

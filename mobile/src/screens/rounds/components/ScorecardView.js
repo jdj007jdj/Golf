@@ -46,7 +46,9 @@ const ScorecardView = ({
   const [showSmartClubSelector, setShowSmartClubSelector] = useState(false);
   const [selectedClub, setSelectedClub] = useState(null);
   const [statisticsCardExpanded, setStatisticsCardExpanded] = useState(true);
-  const [isShotTrackingEnabled, setIsShotTrackingEnabled] = useState(true);
+  
+  // Get GPS tracking setting from settings context
+  const isShotTrackingEnabled = settings?.shotTracking?.enabled ?? true;
 
   // Initialize shot tracking service and club service
   useEffect(() => {
@@ -92,7 +94,21 @@ const ScorecardView = ({
 
   // Handle score change
   const handleScoreChange = async (holeNumber, change) => {
-    const newScore = Math.max(0, Math.min(15, (scores[holeNumber] || 0) + change));
+    const currentScore = scores[holeNumber] || 0;
+    const currentPutts = putts[holeNumber] || 0;
+    const newScore = Math.max(0, Math.min(15, currentScore + change));
+    
+    // When decrementing score, check if we need to adjust putts
+    if (change < 0 && currentScore > 0) {
+      // If the current score equals the number of putts, we're removing a putt
+      if (currentPutts > 0 && currentScore <= currentPutts) {
+        // Decrement putts instead of just score
+        setPutts(prev => ({
+          ...prev,
+          [holeNumber]: Math.max(0, currentPutts - 1)
+        }));
+      }
+    }
     
     // Animate score change
     Animated.sequence([
@@ -134,13 +150,46 @@ const ScorecardView = ({
     }
   };
 
-  // Handle putts change
-  const handlePuttsChange = (holeNumber, change) => {
-    const newPutts = Math.max(0, Math.min(10, (putts[holeNumber] || 0) + change));
-    setPutts(prev => ({
-      ...prev,
-      [holeNumber]: newPutts
-    }));
+  // Handle putts change - putts are part of the score
+  const handlePuttsChange = async (holeNumber, change) => {
+    const currentPutts = putts[holeNumber] || 0;
+    const currentScore = scores[holeNumber] || 0;
+    
+    // Calculate new putts value
+    const newPutts = currentPutts + change;
+    
+    // Validation
+    if (newPutts < 0 || newPutts > 10) {
+      return; // Don't allow negative putts or more than 10
+    }
+    
+    if (change > 0) {
+      // Adding a putt - always increment score
+      // Update putts first
+      setPutts(prev => ({
+        ...prev,
+        [holeNumber]: newPutts
+      }));
+      
+      // Then increment score (which will handle GPS tracking)
+      await handleScoreChange(holeNumber, 1);
+    } else if (change < 0) {
+      // Removing a putt
+      if (currentPutts <= 0) {
+        return; // Can't remove putts if there are none
+      }
+      
+      // Update putts first
+      setPutts(prev => ({
+        ...prev,
+        [holeNumber]: newPutts
+      }));
+      
+      // Decrement score only if score > 0
+      if (currentScore > 0) {
+        await handleScoreChange(holeNumber, -1);
+      }
+    }
   };
 
   // Handle club selection with smart selector
@@ -214,23 +263,12 @@ const ScorecardView = ({
 
   return (
     <View style={styles.container}>
-      {/* GPS Tracking Indicator */}
-      <View style={styles.gpsTrackingContainer}>
-        <View style={styles.gpsTrackingRow}>
-          <Text style={styles.gpsTrackingLabel}>GPS Shot Tracking</Text>
-          <Switch
-            value={isShotTrackingEnabled}
-            onValueChange={setIsShotTrackingEnabled}
-            trackColor={{ false: '#E0E0E0', true: '#81C784' }}
-            thumbColor={isShotTrackingEnabled ? '#2E7D32' : '#f4f3f4'}
-          />
+      {/* GPS Tracking Status Indicator */}
+      {isShotTrackingEnabled && (
+        <View style={styles.gpsStatusBar}>
+          <Text style={styles.gpsStatusText}>📍 GPS Shot Tracking Active</Text>
         </View>
-        {isShotTrackingEnabled && (
-          <Text style={styles.gpsTrackingHint}>
-            GPS coordinates will be logged with each shot
-          </Text>
-        )}
-      </View>
+      )}
 
       {/* Score Summary */}
       {settings.scorecard?.showScoreSummary !== false && (
@@ -288,63 +326,74 @@ const ScorecardView = ({
             </TouchableOpacity>
           </View>
 
-          {/* Score Entry */}
-          <View style={styles.scoreEntry}>
-            <Text style={styles.scoreLabel}>Score</Text>
-            <View style={styles.scoreControls}>
-              <TouchableOpacity
-                style={[styles.scoreButton, currentHoleScore <= 0 && styles.scoreButtonDisabled]}
-                onPress={() => handleScoreChange(currentHole, -1)}
-                disabled={currentHoleScore <= 0}
-              >
-                <Text style={[styles.scoreButtonText, currentHoleScore <= 0 && styles.scoreButtonTextDisabled]}>
-                  -
-                </Text>
-              </TouchableOpacity>
-              
-              <Animated.View style={[styles.scoreDisplay, { transform: [{ scale: scoreAnimation }] }]}>
-                <Text style={styles.scoreValue}>{currentHoleScore}</Text>
-              </Animated.View>
-              
-              <TouchableOpacity
-                style={[styles.scoreButton, currentHoleScore >= 15 && styles.scoreButtonDisabled]}
-                onPress={() => handleScoreChange(currentHole, 1)}
-                disabled={currentHoleScore >= 15}
-              >
-                <Text style={[styles.scoreButtonText, currentHoleScore >= 15 && styles.scoreButtonTextDisabled]}>
-                  +
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Putts Entry */}
-          <View style={styles.puttsEntry}>
-            <Text style={styles.puttsLabel}>Putts</Text>
-            <View style={styles.puttsControls}>
-              <TouchableOpacity
-                style={[styles.puttsButton, currentHolePutts <= 0 && styles.puttsButtonDisabled]}
-                onPress={() => handlePuttsChange(currentHole, -1)}
-                disabled={currentHolePutts <= 0}
-              >
-                <Text style={[styles.puttsButtonText, currentHolePutts <= 0 && styles.puttsButtonTextDisabled]}>
-                  -
-                </Text>
-              </TouchableOpacity>
-              
-              <View style={styles.puttsDisplay}>
-                <Text style={styles.puttsValue}>{currentHolePutts}</Text>
+          {/* Combined Score and Putts Entry */}
+          <View style={styles.scorePuttsCard}>
+            {/* Score Section */}
+            <View style={styles.scoreSection}>
+              <Text style={styles.scoreLabel}>Score</Text>
+              <View style={styles.scoreControls}>
+                <TouchableOpacity
+                  style={[styles.scoreButton, currentHoleScore <= 0 && styles.scoreButtonDisabled]}
+                  onPress={() => handleScoreChange(currentHole, -1)}
+                  disabled={currentHoleScore <= 0}
+                >
+                  <Text style={[styles.scoreButtonText, currentHoleScore <= 0 && styles.scoreButtonTextDisabled]}>
+                    -
+                  </Text>
+                </TouchableOpacity>
+                
+                <Animated.View style={[styles.scoreDisplay, { transform: [{ scale: scoreAnimation }] }]}>
+                  <Text style={styles.scoreValue}>{currentHoleScore}</Text>
+                  {currentHolePutts > 0 && currentHoleScore > 0 && (
+                    <Text style={styles.scoreBreakdown}>
+                      {currentHoleScore - currentHolePutts}+{currentHolePutts}
+                    </Text>
+                  )}
+                </Animated.View>
+                
+                <TouchableOpacity
+                  style={[styles.scoreButton, currentHoleScore >= 15 && styles.scoreButtonDisabled]}
+                  onPress={() => handleScoreChange(currentHole, 1)}
+                  disabled={currentHoleScore >= 15}
+                >
+                  <Text style={[styles.scoreButtonText, currentHoleScore >= 15 && styles.scoreButtonTextDisabled]}>
+                    +
+                  </Text>
+                </TouchableOpacity>
               </View>
-              
-              <TouchableOpacity
-                style={[styles.puttsButton, currentHolePutts >= 10 && styles.puttsButtonDisabled]}
-                onPress={() => handlePuttsChange(currentHole, 1)}
-                disabled={currentHolePutts >= 10}
-              >
-                <Text style={[styles.puttsButtonText, currentHolePutts >= 10 && styles.puttsButtonTextDisabled]}>
-                  +
-                </Text>
-              </TouchableOpacity>
+            </View>
+            
+            {/* Divider */}
+            <View style={styles.divider} />
+            
+            {/* Putts Section */}
+            <View style={styles.puttsSection}>
+              <Text style={styles.puttsLabel}>Putts</Text>
+              <View style={styles.puttsControls}>
+                <TouchableOpacity
+                  style={[styles.puttsButton, currentHolePutts <= 0 && styles.puttsButtonDisabled]}
+                  onPress={() => handlePuttsChange(currentHole, -1)}
+                  disabled={currentHolePutts <= 0}
+                >
+                  <Text style={[styles.puttsButtonText, currentHolePutts <= 0 && styles.puttsButtonTextDisabled]}>
+                    -
+                  </Text>
+                </TouchableOpacity>
+                
+                <View style={styles.puttsDisplay}>
+                  <Text style={styles.puttsValue}>{currentHolePutts}</Text>
+                </View>
+                
+                <TouchableOpacity
+                  style={[styles.puttsButton, currentHolePutts >= 10 && styles.puttsButtonDisabled]}
+                  onPress={() => handlePuttsChange(currentHole, 1)}
+                  disabled={currentHolePutts >= 10}
+                >
+                  <Text style={[styles.puttsButtonText, currentHolePutts >= 10 && styles.puttsButtonTextDisabled]}>
+                    +
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -419,28 +468,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  gpsTrackingContainer: {
-    backgroundColor: 'white',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+  gpsStatusBar: {
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#C8E6C9',
   },
-  gpsTrackingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  gpsTrackingLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  gpsTrackingHint: {
+  gpsStatusText: {
     fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-    fontStyle: 'italic',
+    color: '#2E7D32',
+    textAlign: 'center',
+    fontWeight: '500',
   },
   scoreSummary: {
     flexDirection: 'row',
@@ -526,7 +565,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 5,
   },
-  scoreEntry: {
+  scorePuttsCard: {
     backgroundColor: 'white',
     padding: 20,
     borderRadius: 10,
@@ -536,6 +575,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  scoreSection: {
+    paddingBottom: 15,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginHorizontal: -20,
+    marginVertical: 0,
+  },
+  puttsSection: {
+    paddingTop: 15,
   },
   scoreLabel: {
     fontSize: 18,
@@ -584,21 +635,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2e7d32',
   },
-  puttsEntry: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  scoreBreakdown: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: -4,
+    fontWeight: '500',
   },
   puttsLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
     marginBottom: 10,
     textAlign: 'center',
   },
@@ -608,29 +654,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   puttsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#2e7d32',
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 15,
+    marginHorizontal: 12,
   },
   puttsButtonDisabled: {
     backgroundColor: '#ccc',
   },
   puttsButtonText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   puttsButtonTextDisabled: {
     color: '#999',
   },
   puttsDisplay: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
@@ -638,7 +684,7 @@ const styles = StyleSheet.create({
     borderColor: '#2e7d32',
   },
   puttsValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#2e7d32',
   },
