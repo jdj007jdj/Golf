@@ -81,7 +81,16 @@ const ScorecardView = ({
   // Calculate totals
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
   const totalPar = holes.reduce((sum, hole) => sum + (hole.par || 4), 0);
-  const scoreToPar = totalScore - totalPar;
+  
+  // Calculate par for only played holes
+  const playedHolesPar = Object.keys(scores)
+    .filter(holeNum => scores[holeNum] > 0)
+    .reduce((sum, holeNum) => {
+      const hole = holes.find(h => h.holeNumber === parseInt(holeNum));
+      return sum + (hole?.par || 4);
+    }, 0);
+  
+  const scoreToPar = totalScore - playedHolesPar;
 
   // Get current hole data
   const currentHoleData = holes.find(hole => hole.holeNumber === currentHole) || holes[0];
@@ -260,39 +269,42 @@ const ScorecardView = ({
   // Check if we should show finish button
   const playedHoles = Object.keys(scores).filter(hole => scores[hole] > 0);
   const shouldShowFinishButton = playedHoles.length >= 9; // Allow finishing after 9 holes
+  
+  // Calculate last 2 holes scores with detailed info
+  const lastTwoHoles = [];
+  if (currentHole > 1 && scores[currentHole - 1]) {
+    const holeData = holes.find(h => h.holeNumber === currentHole - 1);
+    const score = scores[currentHole - 1];
+    const par = holeData?.par || 4;
+    const diff = score - par;
+    lastTwoHoles.push({ 
+      hole: currentHole - 1, 
+      score, 
+      par,
+      diff,
+      label: diff === 0 ? 'Par' : diff > 0 ? `+${diff}` : `${diff}`
+    });
+  }
+  if (currentHole > 2 && scores[currentHole - 2]) {
+    const holeData = holes.find(h => h.holeNumber === currentHole - 2);
+    const score = scores[currentHole - 2];
+    const par = holeData?.par || 4;
+    const diff = score - par;
+    lastTwoHoles.push({ 
+      hole: currentHole - 2, 
+      score, 
+      par,
+      diff,
+      label: diff === 0 ? 'Par' : diff > 0 ? `+${diff}` : `${diff}`
+    });
+  }
+  
+  // Calculate total shots played
+  const totalShotsPlayed = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
+  const holesPlayed = Object.keys(scores).filter(hole => scores[hole] > 0).length;
 
   return (
     <View style={styles.container}>
-      {/* GPS Tracking Status Indicator */}
-      {isShotTrackingEnabled && (
-        <View style={styles.gpsStatusBar}>
-          <Text style={styles.gpsStatusText}>📍 GPS Shot Tracking Active</Text>
-        </View>
-      )}
-
-      {/* Score Summary */}
-      {settings.scorecard?.showScoreSummary !== false && (
-        <View style={styles.scoreSummary}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Total</Text>
-            <Text style={styles.summaryValue}>{totalScore}</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Par</Text>
-            <Text style={styles.summaryValue}>{totalPar}</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Score</Text>
-            <Text style={[
-              styles.summaryValue,
-              scoreToPar < 0 ? styles.underPar : scoreToPar > 0 ? styles.overPar : styles.evenPar
-            ]}>
-              {scoreToPar === 0 ? 'E' : scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}
-            </Text>
-          </View>
-        </View>
-      )}
-
       {/* Main Scorecard Content */}
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.currentHole}>
@@ -326,8 +338,31 @@ const ScorecardView = ({
             </TouchableOpacity>
           </View>
 
+          {/* Smart Club Selection - MOVED UP */}
+          <View style={styles.clubSelection}>
+            <TouchableOpacity
+              style={styles.smartClubButton}
+              onPress={() => setShowSmartClubSelector(true)}
+            >
+              <View style={styles.clubButtonContent}>
+                <Text style={styles.clubButtonLabel}>Club</Text>
+                <Text style={styles.clubButtonText}>
+                  {selectedClub ? selectedClub.getShortName() : 'Select'}
+                </Text>
+              </View>
+              <Text style={styles.clubButtonArrow}>🏌️</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Combined Score and Putts Entry */}
           <View style={styles.scorePuttsCard}>
+            {/* GPS Tracking Notification */}
+            {isShotTrackingEnabled && (
+              <View style={styles.gpsNotification}>
+                <Text style={styles.gpsNotificationText}>📍 GPS Shot Tracking</Text>
+              </View>
+            )}
+            
             {/* Score Section */}
             <View style={styles.scoreSection}>
               <Text style={styles.scoreLabel}>Score</Text>
@@ -397,22 +432,6 @@ const ScorecardView = ({
             </View>
           </View>
 
-          {/* Smart Club Selection */}
-          <View style={styles.clubSelection}>
-            <TouchableOpacity
-              style={styles.smartClubButton}
-              onPress={() => setShowSmartClubSelector(true)}
-            >
-              <View style={styles.clubButtonContent}>
-                <Text style={styles.clubButtonLabel}>Club</Text>
-                <Text style={styles.clubButtonText}>
-                  {selectedClub ? selectedClub.getShortName() : 'Select'}
-                </Text>
-              </View>
-              <Text style={styles.clubButtonArrow}>🏌️</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* Historical Data Display */}
           {currentHoleHistorical && (
             <View style={styles.historicalSection}>
@@ -450,6 +469,53 @@ const ScorecardView = ({
           )}
         </View>
       </ScrollView>
+      
+      {/* Bottom Score Summary */}
+      {settings.scorecard?.showScoreSummary !== false && (
+        <View style={styles.bottomSummary}>
+          {/* Last 2 Holes */}
+          {lastTwoHoles.length > 0 && (
+            <View style={styles.recentHolesContainer}>
+              {lastTwoHoles.map((hole) => (
+                <View key={hole.hole} style={styles.recentHoleCard}>
+                  <Text style={styles.recentHoleNumber}>Hole {hole.hole}</Text>
+                  <View style={styles.recentHoleInfo}>
+                    <Text style={styles.recentHoleScore}>{hole.score}</Text>
+                    <Text style={[
+                      styles.recentHoleDiff,
+                      hole.diff < 0 ? styles.underPar : hole.diff > 0 ? styles.overPar : styles.evenPar
+                    ]}>
+                      {hole.label}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+          
+          {/* Summary Stats */}
+          <View style={styles.summaryStats}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Shots</Text>
+              <Text style={styles.summaryValue}>{totalShotsPlayed}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Holes</Text>
+              <Text style={styles.summaryValue}>{holesPlayed}/18</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Score</Text>
+              <Text style={[
+                styles.summaryValue,
+                styles.summaryScore,
+                scoreToPar < 0 ? styles.underPar : scoreToPar > 0 ? styles.overPar : styles.evenPar
+              ]}>
+                {scoreToPar === 0 ? 'E' : scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Smart Club Selection Modal */}
       <SmartClubSelector
@@ -468,40 +534,81 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  gpsStatusBar: {
+  gpsNotification: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
     backgroundColor: '#E8F5E9',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#C8E6C9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 1,
   },
-  gpsStatusText: {
-    fontSize: 12,
+  gpsNotificationText: {
+    fontSize: 11,
     color: '#2E7D32',
-    textAlign: 'center',
     fontWeight: '500',
   },
-  scoreSummary: {
-    flexDirection: 'row',
+  bottomSummary: {
     backgroundColor: 'white',
-    paddingVertical: 20,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  summaryItem: {
-    flex: 1,
+  recentHolesContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  recentHoleCard: {
+    backgroundColor: '#f8f8f8',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  recentHoleNumber: {
+    fontSize: 11,
+    color: '#666',
+    marginBottom: 4,
+  },
+  recentHoleInfo: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  recentHoleScore: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  recentHoleDiff: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  summaryRow: {
     alignItems: 'center',
   },
   summaryLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
-    marginBottom: 5,
+    marginBottom: 2,
   },
   summaryValue: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
+  },
+  summaryScore: {
+    fontSize: 24,
   },
   underPar: {
     color: '#2e7d32',
