@@ -33,6 +33,7 @@ const ScorecardView = ({
   historicalData,
   clubData,
   settings,
+  updateSettings,
   // CLUB_OPTIONS removed - using clubService now
   navigation,
   isSavingRound,
@@ -46,6 +47,9 @@ const ScorecardView = ({
   const [showSmartClubSelector, setShowSmartClubSelector] = useState(false);
   const [selectedClub, setSelectedClub] = useState(null);
   const [statisticsCardExpanded, setStatisticsCardExpanded] = useState(true);
+  const [selectingForShot, setSelectingForShot] = useState(null);
+  const [showClubReminders, setShowClubReminders] = useState(settings?.scorecard?.showClubReminders ?? true);
+  const [clubTrackingDisabledForRound, setClubTrackingDisabledForRound] = useState(false);
   
   // Get GPS tracking setting from settings context
   const isShotTrackingEnabled = settings?.shotTracking?.enabled ?? true;
@@ -69,14 +73,15 @@ const ScorecardView = ({
 
   // Update selected club when hole changes
   useEffect(() => {
-    const clubId = clubs[currentHole];
+    const currentShot = scores[currentHole] || 0;
+    const clubId = clubs[`${currentHole}-${currentShot}`];
     if (clubId) {
       const club = clubService.getClub(clubId);
       setSelectedClub(club);
     } else {
       setSelectedClub(null);
     }
-  }, [currentHole, clubs]);
+  }, [currentHole, clubs, scores]);
 
   // Calculate totals
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
@@ -106,6 +111,21 @@ const ScorecardView = ({
     const currentScore = scores[holeNumber] || 0;
     const currentPutts = putts[holeNumber] || 0;
     const newScore = Math.max(0, Math.min(15, currentScore + change));
+    
+    // When incrementing score (adding a shot)
+    if (change > 0 && showClubReminders && !clubTrackingDisabledForRound) {
+      // Check if we should auto-open club selector
+      const currentShotClub = clubs[`${holeNumber}-${newScore}`] || null;
+      
+      // Auto-open club selector if no club selected for this shot yet
+      if (!currentShotClub) {
+        // Automatically open club selector for this shot
+        setTimeout(() => {
+          setShowSmartClubSelector(true);
+          setSelectingForShot(newScore);
+        }, 300); // Small delay to let score animation complete
+      }
+    }
     
     // When decrementing score, check if we need to adjust putts
     if (change < 0 && currentScore > 0) {
@@ -180,8 +200,55 @@ const ScorecardView = ({
         [holeNumber]: newPutts
       }));
       
-      // Then increment score (which will handle GPS tracking)
-      await handleScoreChange(holeNumber, 1);
+      // Auto-select putter for putts
+      const allClubs = clubService.getAllClubs();
+      const putterClub = allClubs.find(club => club.clubType === 'putter');
+      if (putterClub) {
+        const newScore = (currentScore || 0) + 1;
+        setClubs(prev => ({
+          ...prev,
+          [`${holeNumber}-${newScore}`]: putterClub.id
+        }));
+      }
+      
+      // Then increment score WITHOUT triggering club reminder
+      // Animate score change
+      Animated.sequence([
+        Animated.timing(scoreAnimation, {
+          toValue: 1.2,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scoreAnimation, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      const newScore = (currentScore || 0) + 1;
+      setScores(prev => ({
+        ...prev,
+        [holeNumber]: newScore
+      }));
+      
+      // Handle GPS tracking directly for putts
+      if (isShotTrackingEnabled) {
+        try {
+          const clubId = putterClub?.id || null;
+          
+          await shotTrackingService.logShot(
+            holeNumber,
+            newScore,
+            newScore,
+            clubId
+          );
+          
+          console.log(`Putt tracked: Hole ${holeNumber}, Shot ${newScore}`);
+        } catch (error) {
+          console.error('Failed to track putt:', error);
+        }
+      }
     } else if (change < 0) {
       // Removing a putt
       if (currentPutts <= 0) {
@@ -203,9 +270,11 @@ const ScorecardView = ({
 
   // Handle club selection with smart selector
   const handleClubSelection = async (clubId) => {
+    const shotNumber = selectingForShot || (scores[currentHole] || 0);
+    
     setClubs(prev => ({
       ...prev,
-      [currentHole]: clubId
+      [`${currentHole}-${shotNumber}`]: clubId
     }));
     
     // Update selected club display
@@ -213,6 +282,7 @@ const ScorecardView = ({
     setSelectedClub(club);
     
     setShowSmartClubSelector(false);
+    setSelectingForShot(null);
   };
 
   // Handle navigation between holes
@@ -335,22 +405,6 @@ const ScorecardView = ({
               <Text style={[styles.navButtonText, currentHole === 18 && styles.navButtonTextDisabled]}>
                 ▶
               </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Smart Club Selection - MOVED UP */}
-          <View style={styles.clubSelection}>
-            <TouchableOpacity
-              style={styles.smartClubButton}
-              onPress={() => setShowSmartClubSelector(true)}
-            >
-              <View style={styles.clubButtonContent}>
-                <Text style={styles.clubButtonLabel}>Club</Text>
-                <Text style={styles.clubButtonText}>
-                  {selectedClub ? selectedClub.getShortName() : 'Select'}
-                </Text>
-              </View>
-              <Text style={styles.clubButtonArrow}>🏌️</Text>
             </TouchableOpacity>
           </View>
 
@@ -522,6 +576,7 @@ const ScorecardView = ({
         visible={showSmartClubSelector}
         onClose={() => setShowSmartClubSelector(false)}
         onClubSelect={handleClubSelection}
+        onDisableForRound={() => setClubTrackingDisabledForRound(true)}
         holeNumber={currentHole}
         courseId={course?.id}
       />

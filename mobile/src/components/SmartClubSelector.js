@@ -28,6 +28,7 @@ const SmartClubSelector = ({
   visible,
   onClose,
   onClubSelect,
+  onDisableForRound,
   holeNumber,
   currentPosition,
   pinPosition,
@@ -314,6 +315,19 @@ const SmartClubSelector = ({
 
           {/* Content */}
           {selectedTab === 'smart' ? renderSmartSuggestions() : renderAllClubs()}
+          
+          {/* Disable for round option */}
+          {onDisableForRound && (
+            <TouchableOpacity 
+              style={styles.disableButton}
+              onPress={() => {
+                onDisableForRound();
+                onClose();
+              }}
+            >
+              <Text style={styles.disableButtonText}>Don't track clubs this round</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
@@ -531,6 +545,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#2E7D32',
+  },
+  disableButton: {
+    margin: 16,
+    marginTop: 8,
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  disableButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
   },
 });
 

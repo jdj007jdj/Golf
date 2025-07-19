@@ -43,6 +43,7 @@ const SettingsScreen = ({ navigation }) => {
   const [showScoreSummary, setShowScoreSummary] = useState(settings.scorecard?.showScoreSummary ?? true);
   const [showAchievementNotifications, setShowAchievementNotifications] = useState(settings.scorecard?.showAchievementNotifications ?? true);
   const [showSmartClubTracking, setShowSmartClubTracking] = useState(settings.scorecard?.showSmartClubTracking ?? true);
+  const [showClubReminders, setShowClubReminders] = useState(settings.scorecard?.showClubReminders ?? true);
   
   // Theme Preferences (preparing for future dark mode)
   const [theme, setTheme] = useState(settings.theme);
@@ -194,6 +195,7 @@ const SettingsScreen = ({ navigation }) => {
           showClubSelection: false, // Future feature
           showAchievementNotifications,
           showSmartClubTracking,
+          showClubReminders,
         },
         shotTracking: {
           enabled: isShotTrackingEnabled,
@@ -439,6 +441,7 @@ const SettingsScreen = ({ navigation }) => {
           {renderSwitch('Score Summary', showScoreSummary, setShowScoreSummary, 'Show running total and score to par')}
           {renderSwitch('Achievement Notifications', showAchievementNotifications, setShowAchievementNotifications, 'Show milestone alerts during rounds')}
           {renderSwitch('Smart Club Tracking', showSmartClubTracking, setShowSmartClubTracking, 'Track and recommend clubs during play')}
+          {renderSwitch('Auto Club Selection', showClubReminders, setShowClubReminders, 'Automatically open club selector when adding shots')}
         </View>
 
         {/* GPS Shot Tracking Section */}
