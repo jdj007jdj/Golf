@@ -578,6 +578,7 @@ const ScorecardView = ({
         onClubSelect={handleClubSelection}
         onDisableForRound={() => setClubTrackingDisabledForRound(true)}
         holeNumber={currentHole}
+        shotNumber={selectingForShot}
         courseId={course?.id}
       />
     </View>

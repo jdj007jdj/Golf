@@ -30,6 +30,7 @@ const SmartClubSelector = ({
   onClubSelect,
   onDisableForRound,
   holeNumber,
+  shotNumber,
   currentPosition,
   pinPosition,
   courseId
@@ -41,6 +42,7 @@ const SmartClubSelector = ({
   const [recommendedClubs, setRecommendedClubs] = useState([]);
   const [holeHistory, setHoleHistory] = useState([]);
   const [mostUsedClub, setMostUsedClub] = useState(null);
+  const [shotSpecificClub, setShotSpecificClub] = useState(null);
 
   // Helper function to format distance based on user's measurement preference
   const formatDistance = (yards) => {
@@ -100,7 +102,28 @@ const SmartClubSelector = ({
         const history = JSON.parse(data);
         setHoleHistory(history);
         
-        // Find most used club
+        // Find most used club for this specific shot number
+        if (shotNumber) {
+          const shotHistory = history.filter(entry => entry.shotNumber === shotNumber);
+          if (shotHistory.length > 0) {
+            const shotClubCounts = {};
+            shotHistory.forEach(entry => {
+              if (entry.clubId) {
+                shotClubCounts[entry.clubId] = (shotClubCounts[entry.clubId] || 0) + 1;
+              }
+            });
+            
+            const mostUsedShotId = Object.entries(shotClubCounts)
+              .sort(([,a], [,b]) => b - a)[0]?.[0];
+              
+            if (mostUsedShotId) {
+              const club = clubService.getClub(mostUsedShotId);
+              setShotSpecificClub(club);
+            }
+          }
+        }
+        
+        // Find most used club overall on this hole
         const clubCounts = {};
         history.forEach(entry => {
           if (entry.clubId) {
@@ -129,6 +152,7 @@ const SmartClubSelector = ({
       
       history.push({
         clubId,
+        shotNumber: shotNumber || 1,
         date: new Date().toISOString(),
         distance: distanceToPin
       });
@@ -151,40 +175,42 @@ const SmartClubSelector = ({
   const renderSmartSuggestions = () => {
     return (
       <ScrollView style={styles.suggestionsContainer} showsVerticalScrollIndicator={false}>
-        {/* Distance and recommendations header */}
+        {/* Distance header */}
         {distanceToPin && (
           <View style={styles.distanceHeader}>
             <Text style={styles.distanceText}>{formatDistance(distanceToPin)} to pin</Text>
           </View>
         )}
 
-        {/* Most used club on this hole */}
-        {mostUsedClub && (
+        {/* Your usual club for this specific shot */}
+        {shotSpecificClub && (
           <View style={styles.suggestionSection}>
-            <Text style={styles.suggestionTitle}>Your Favorite on Hole {holeNumber}</Text>
+            <Text style={styles.suggestionTitle}>
+              Your usual {shotNumber === 1 ? 'tee shot' : `shot ${shotNumber}`} on Hole {holeNumber}
+            </Text>
             <TouchableOpacity
-              style={[styles.clubCard, styles.favoriteCard]}
-              onPress={() => handleClubSelect(mostUsedClub)}
+              style={[styles.clubCard, styles.shotSpecificCard]}
+              onPress={() => handleClubSelect(shotSpecificClub)}
             >
               <View style={styles.clubCardContent}>
-                <Text style={styles.clubCardName}>{mostUsedClub.getShortName()}</Text>
-                <Text style={styles.clubCardBrand}>{mostUsedClub.brand}</Text>
+                <Text style={styles.clubCardName}>{shotSpecificClub.getShortName()}</Text>
+                <Text style={styles.clubCardBrand}>{shotSpecificClub.brand}</Text>
               </View>
               <View style={styles.clubCardStats}>
-                {mostUsedClub.avgDistance && (
-                  <Text style={styles.clubCardDistance}>{formatDistance(mostUsedClub.avgDistance)}</Text>
+                {shotSpecificClub.avgDistance && (
+                  <Text style={styles.clubCardDistance}>{formatDistance(shotSpecificClub.avgDistance)}</Text>
                 )}
-                <Text style={styles.favoriteLabel}>★ Most Used</Text>
+                <Text style={styles.shotSpecificLabel}>🎯 Shot {shotNumber}</Text>
               </View>
             </TouchableOpacity>
           </View>
         )}
 
         {/* Distance-based recommendations */}
-        {recommendedClubs.length > 0 && (
+        {distanceToPin && recommendedClubs.length > 0 && (
           <View style={styles.suggestionSection}>
-            <Text style={styles.suggestionTitle}>Recommended for Distance</Text>
-            {recommendedClubs.map((rec, index) => (
+            <Text style={styles.suggestionTitle}>Best for {formatDistance(distanceToPin)}</Text>
+            {recommendedClubs.slice(0, 3).map((rec, index) => (
               <TouchableOpacity
                 key={rec.club.id}
                 style={[
@@ -465,6 +491,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FF6B35',
     marginTop: 4,
+  },
+  shotSpecificCard: {
+    borderColor: '#2196F3',
+    borderWidth: 2,
+  },
+  shotSpecificLabel: {
+    fontSize: 12,
+    color: '#2196F3',
+    fontWeight: '600',
   },
   perfectMatch: {
     fontSize: 12,
