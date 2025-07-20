@@ -390,6 +390,55 @@ The plan contains 5 phases from Foundation Stabilization to Advanced Features. A
    - Reduced unnecessary re-renders
 
 **Current Status**: All UI improvements complete and tested.
+
+### GPS Calibration System (Completed)
+**Advanced GPS offset calibration for accurate shot positioning**
+**Implementation Date**: January 20, 2025
+
+**Problem Solved**: GPS positioning can be off by 40+ meters even with 3-meter accuracy
+- Real GPS position doesn't match actual location on map
+- Shots appear in wrong locations affecting distance calculations
+- Manual calibration needed to correct systematic GPS offset
+
+**Calibration Features Implemented**:
+1. **Visual Calibration Mode**:
+   - Long press GPS info card to enter calibration mode
+   - GPS card turns orange with border when active
+   - Red crosshair shows raw GPS position
+   - Green crosshair shows calibrated position (after offset applied)
+   - Tap actual location on map to set offset
+   
+2. **Persistent Offset Storage**:
+   - Calibration offset saved to AsyncStorage
+   - Automatically loaded on app restart
+   - Applied to all shot positions and distances
+   - Reset option available in calibration dialog
+   
+3. **Enhanced UI Controls**:
+   - Location button (📍) centers map on calibrated position
+   - Shows 🎯 icon when in calibration mode
+   - Blue background with increased visibility
+   - Shot toggle button (🎯/⚪) positioned left of location button
+   
+4. **Technical Implementation**:
+   - PanResponder configured for dual-purpose (panning + calibration taps)
+   - Smart gesture detection - only captures pan movements > 5 pixels
+   - Allows long press and taps to pass through to UI elements
+   - Calibration taps only captured when in calibration mode
+   - Offset applied to shot coordinates in ShotOverlay component
+   
+5. **User Experience**:
+   - Clear visual feedback during calibration
+   - Alert dialogs explain calibration process
+   - Shows offset in meters (latitude/longitude)
+   - Immediate visual update when calibration applied
+   - All shots and distances automatically adjusted
+
+**Files Modified**:
+- MapViewWithGestures.js - Added calibration mode, visual markers, gesture handling
+- ShotOverlay.js - Applied calibration offset to shot positions
+
+**Current Status**: 100% working with offline functionality and GPS calibration.
    
 4. **Performance Improvements**:
    - Instant tile loading from memory cache

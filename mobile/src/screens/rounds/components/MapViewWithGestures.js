@@ -107,8 +107,11 @@ const CourseMapView = React.memo(({
   // Create a transparent overlay to capture gestures
   const panResponder = useMemo(() =>
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false, // Don't capture on touch start to allow taps/long press
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Only capture if there's actual movement (pan gesture)
+        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+      },
       onPanResponderEnd: (evt) => {
         console.log('🎯 PanResponder onEnd triggered', {
           calibrationMode,
@@ -154,8 +157,8 @@ const CourseMapView = React.memo(({
           );
         }
       },
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
+      onStartShouldSetPanResponderCapture: () => calibrationMode, // Only capture in calibration mode
+      onMoveShouldSetPanResponderCapture: () => false,
       
       onPanResponderGrant: (evt) => {
         console.log('👆 Pan gesture started');
@@ -902,13 +905,11 @@ const CourseMapView = React.memo(({
         )}
       </MapLibreGL.MapView>
 
-      {/* Gesture capture overlay - Only active in calibration mode */}
-      {calibrationMode && (
-        <View
-          style={styles.gestureOverlay}
-          {...panResponder.panHandlers}
-        />
-      )}
+      {/* Gesture capture overlay - Always active for panning and calibration */}
+      <View
+        style={styles.gestureOverlay}
+        {...panResponder.panHandlers}
+      />
       
       {/* Calibration Mode Overlay - Positioned after gesture overlay */}
       {calibrationMode && userLocation && mapBounds && (
@@ -1009,7 +1010,22 @@ const CourseMapView = React.memo(({
       </View>
 
       {/* GPS Info */}
-      <View style={styles.gpsInfo}>
+      <TouchableOpacity 
+        style={[styles.gpsInfo, calibrationMode && styles.gpsInfoCalibrationMode]}
+        activeOpacity={0.8}
+        onLongPress={() => {
+          console.log('GPS card long pressed!');
+          // Toggle calibration mode on long press
+          setCalibrationMode(!calibrationMode);
+          if (!calibrationMode) {
+            Alert.alert(
+              'GPS Calibration Mode',
+              'Tap on your actual location on the map to calibrate GPS offset.\n\nThe red crosshair shows your GPS position.\nTap where you actually are to set the offset.',
+              [{ text: 'OK' }]
+            );
+          }
+        }}
+      >
         <View style={styles.gpsHeader}>
           <Text style={styles.gpsTitle}>📍 GPS</Text>
           <View style={[styles.gpsStatusDot, { backgroundColor: userLocation ? '#4CAF50' : '#f44336' }]} />
@@ -1027,7 +1043,7 @@ const CourseMapView = React.memo(({
         ) : (
           <Text style={styles.gpsText}>Acquiring...</Text>
         )}
-      </View>
+      </TouchableOpacity>
       
       {/* User location button */}
       {hasLocationPermission && userLocation && userLocation.latitude && userLocation.longitude ? (
@@ -1040,18 +1056,6 @@ const CourseMapView = React.memo(({
               const lng = userLocation.longitude + calibrationOffset.lng;
               const lat = userLocation.latitude + calibrationOffset.lat;
               flyToLocation(lng, lat, 18);
-            }
-          }}
-          onLongPress={() => {
-            console.log('Location button long pressed!');
-            // Toggle calibration mode on long press
-            setCalibrationMode(!calibrationMode);
-            if (!calibrationMode) {
-              Alert.alert(
-                'Calibration Mode On',
-                'Tap on the map where you actually are to calibrate GPS offset.\n\nThe red crosshair shows raw GPS position.\nTap your actual location to set the offset.',
-                [{ text: 'OK' }]
-              );
             }
           }}
         >
@@ -1156,7 +1160,7 @@ const styles = StyleSheet.create({
   },
   gestureOverlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 999,
+    zIndex: 2,
     backgroundColor: 'transparent',
   },
   markerContainer: {
@@ -1300,6 +1304,11 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
     minWidth: 120,
+  },
+  gpsInfoCalibrationMode: {
+    backgroundColor: 'rgba(255, 87, 34, 0.95)',
+    borderWidth: 2,
+    borderColor: '#D84315',
   },
   gpsHeader: {
     flexDirection: 'row',
