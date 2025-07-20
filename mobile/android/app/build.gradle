@@ -121,4 +121,10 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+    
+    // Wear OS app for auto-install
+    wearApp project(':wear')
+    
+    // Wearable dependencies for communication
+    implementation 'com.google.android.gms:play-services-wearable:18.1.0'
 }

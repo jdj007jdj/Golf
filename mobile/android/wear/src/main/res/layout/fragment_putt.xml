@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.wear.widget.BoxInsetLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="@dimen/box_inset_layout_padding">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="16dp"
+        app:layout_boxedEdges="all">
+
+        <!-- Hole Number -->
+        <TextView
+            android:id="@+id/holeNumber"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/hole_label"
+            android:textSize="16sp"
+            android:textColor="@android:color/white"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Title -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/putts"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Putt Counter -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="16dp">
+
+            <!-- Decrease Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/decreaseButton"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:text="@string/minus"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                app:cornerRadius="28dp"
+                android:backgroundTint="#F44336"
+                android:layout_marginEnd="24dp" />
+
+            <!-- Putt Count -->
+            <TextView
+                android:id="@+id/puttCountText"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:text="0"
+                android:textSize="48sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white"
+                android:gravity="center"
+                android:background="@drawable/circle_background"
+                android:elevation="4dp" />
+
+            <!-- Increase Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/increaseButton"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:text="@string/plus"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                app:cornerRadius="28dp"
+                android:backgroundTint="#4CAF50"
+                android:layout_marginStart="24dp" />
+
+        </LinearLayout>
+
+        <!-- Performance Text -->
+        <TextView
+            android:id="@+id/performanceText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="@android:color/darker_gray"
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
+
+        <!-- Instructions -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/putt_instructions"
+            android:textSize="12sp"
+            android:textColor="@android:color/darker_gray"
+            android:textAlignment="center"
+            android:layout_marginTop="24dp"
+            android:alpha="0.7" />
+
+    </LinearLayout>
+
+</androidx.wear.widget.BoxInsetLayout>

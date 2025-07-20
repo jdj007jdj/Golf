@@ -7,7 +7,10 @@ import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import androidx.wear.widget.SwipeDismissFrameLayout
 import com.golfapp.wear.databinding.ActivityMainBinding
-import com.golfapp.wear.fragments.*
+import com.golfapp.wear.fragments.ShotFragment
+import com.golfapp.wear.fragments.ClubFragment
+import com.golfapp.wear.fragments.PuttFragment
+import com.golfapp.wear.fragments.StatsFragment
 import com.google.android.gms.wearable.*
 import org.json.JSONObject
 
@@ -40,7 +43,7 @@ class MainActivity : FragmentActivity(),
     }
 
     private fun setupViewPager() {
-        viewPager = binding.viewPager
+        viewPager = findViewById(R.id.view_pager)
         val pagerAdapter = ScreenSlidePagerAdapter(this)
         viewPager.adapter = pagerAdapter
         
@@ -70,6 +73,13 @@ class MainActivity : FragmentActivity(),
         super.onPause()
         dataClient.removeListener(this)
         messageClient.removeListener(this)
+        
+        // Stop location updates in all fragments to save battery
+        supportFragmentManager.fragments.forEach { fragment ->
+            if (fragment is ShotFragment) {
+                fragment.onPause()
+            }
+        }
     }
 
     private fun checkPhoneConnection() {
@@ -216,13 +226,14 @@ class MainActivity : FragmentActivity(),
     }
 
     private fun updateUIForRoundStatus() {
+        val noRoundLayout = findViewById<View>(R.id.no_round_layout)
         if (!isRoundActive) {
             // Show "waiting for round" screen
-            binding.viewPager.visibility = ViewPager2.GONE
-            binding.noRoundLayout.visibility = android.view.View.VISIBLE
+            viewPager.visibility = View.GONE
+            noRoundLayout.visibility = View.VISIBLE
         } else {
-            binding.viewPager.visibility = ViewPager2.VISIBLE
-            binding.noRoundLayout.visibility = android.view.View.GONE
+            viewPager.visibility = View.VISIBLE
+            noRoundLayout.visibility = View.GONE
         }
     }
 

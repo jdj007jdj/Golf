@@ -60,6 +60,7 @@ const ScorecardView = ({
   const [animationTimeouts, setAnimationTimeouts] = useState([]);
   const [currentDistances, setCurrentDistances] = useState(null);
   const [lastShotDistance, setLastShotDistance] = useState(null);
+  const [watchConnected, setWatchConnected] = useState(false);
   
   // Get GPS tracking setting from settings context
   const isShotTrackingEnabled = settings?.shotTracking?.enabled ?? true;
@@ -90,6 +91,10 @@ const ScorecardView = ({
           
           // Initialize wearable service
           wearableService.initialize();
+          
+          // Check initial connection status
+          const isConnected = await wearableService.isConnected();
+          setWatchConnected(isConnected);
           
           // Start round on watch
           await wearableService.startRound({
@@ -191,6 +196,7 @@ const ScorecardView = ({
 
     const unsubscribeConnection = wearableService.onConnectionStatusChanged((status) => {
       console.log('Watch connection status:', status);
+      setWatchConnected(status.connected);
     });
 
     // Cleanup
@@ -241,9 +247,9 @@ const ScorecardView = ({
       }
     };
 
-    // Update immediately and then every 5 seconds
+    // Update immediately and then every 15 seconds (battery optimization)
     updateDistances();
-    const interval = setInterval(updateDistances, 5000);
+    const interval = setInterval(updateDistances, 15000);
 
     return () => clearInterval(interval);
   }, [currentHole, isShotTrackingEnabled, scores, settings?.measurementSystem]);
@@ -650,6 +656,16 @@ const ScorecardView = ({
 
   return (
     <View style={styles.container}>
+      {/* Watch Connection Status */}
+      {isShotTrackingEnabled && (
+        <View style={styles.watchStatusBar}>
+          <View style={[styles.watchStatusIndicator, watchConnected ? styles.watchConnected : styles.watchDisconnected]} />
+          <Text style={styles.watchStatusText}>
+            {watchConnected ? '⌚ Watch connected' : '⌚ Watch disconnected'}
+          </Text>
+        </View>
+      )}
+      
       {/* Main Scorecard Content */}
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.currentHole}>
@@ -895,6 +911,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  watchStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  watchStatusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  watchConnected: {
+    backgroundColor: '#4CAF50',
+  },
+  watchDisconnected: {
+    backgroundColor: '#FF5252',
+  },
+  watchStatusText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '500',
   },
   gpsNotification: {
     position: 'absolute',

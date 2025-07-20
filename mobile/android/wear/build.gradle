@@ -13,6 +13,11 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+        
+        // Battery optimization flags
+        buildConfigField "boolean", "ENABLE_BATTERY_OPTIMIZATION", "true"
+        buildConfigField "long", "GPS_UPDATE_INTERVAL", "10000L"
+        buildConfigField "long", "STATS_UPDATE_INTERVAL", "15000L"
     }
 
     buildTypes {

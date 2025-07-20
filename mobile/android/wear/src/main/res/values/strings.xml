@@ -14,4 +14,26 @@
     <string name="not_connected">Not Connected</string>
     <string name="shot_recorded">Shot Recorded</string>
     <string name="club_selected">Club Selected</string>
+    
+    <!-- Main Screen -->
+    <string name="waiting_for_round">Waiting for round...</string>
+    <string name="no_round_message">Start a round on your phone</string>
+    
+    <!-- Club Selection -->
+    <string name="recent_clubs">Recent</string>
+    
+    <!-- Putt Counter -->
+    <string name="minus">−</string>
+    <string name="plus">+</string>
+    <string name="putt_excellent">Excellent!</string>
+    <string name="putt_good">Good</string>
+    <string name="putt_average">Average</string>
+    <string name="putt_needs_work">Keep practicing</string>
+    <string name="putt_instructions">Long press counter to reset</string>
+    
+    <!-- Stats -->
+    <string name="last_shot">Last Shot</string>
+    <string name="no_stats_available">No stats available</string>
+    <string name="last_update">Updated %s</string>
+    <string name="refresh">Refresh</string>
 </resources>

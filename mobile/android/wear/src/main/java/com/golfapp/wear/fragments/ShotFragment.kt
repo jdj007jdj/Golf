@@ -34,8 +34,9 @@ class ShotFragment : Fragment() {
     
     companion object {
         private const val LOCATION_PERMISSION_REQUEST = 1001
-        private const val LOCATION_UPDATE_INTERVAL = 5000L // 5 seconds
-        private const val FASTEST_LOCATION_INTERVAL = 2000L // 2 seconds
+        private const val LOCATION_UPDATE_INTERVAL = 10000L // 10 seconds for battery saving
+        private const val FASTEST_LOCATION_INTERVAL = 5000L // 5 seconds minimum
+        private const val LOCATION_TIMEOUT = 10000L // 10 second timeout for single shot
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,8 +108,10 @@ class ShotFragment : Fragment() {
     private fun requestFreshLocation() {
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
-            1000 // 1 second
-        ).build()
+            LOCATION_TIMEOUT
+        )
+        .setMaxUpdates(1) // Only get one location update for battery saving
+        .build()
         
         if (ActivityCompat.checkSelfPermission(
                 requireContext(),
@@ -209,10 +212,11 @@ class ShotFragment : Fragment() {
     
     private fun startLocationUpdates() {
         val locationRequest = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY,
+            Priority.PRIORITY_BALANCED_POWER_ACCURACY, // Battery efficient for status updates
             LOCATION_UPDATE_INTERVAL
         ).apply {
             setMinUpdateIntervalMillis(FASTEST_LOCATION_INTERVAL)
+            setMinUpdateDistanceMeters(10f) // Only update if moved 10 meters
         }.build()
         
         if (ActivityCompat.checkSelfPermission(
