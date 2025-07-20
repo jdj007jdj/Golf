@@ -290,6 +290,7 @@ const ScorecardContainer = ({ route, navigation }) => {
         />
         
         <Tab.Navigator
+          key={round?.id || 'scorecard-tabs'}
           screenOptions={{
             tabBarActiveTintColor: '#2e7d32',
             tabBarInactiveTintColor: '#666',
@@ -307,14 +308,17 @@ const ScorecardContainer = ({ route, navigation }) => {
           <Tab.Screen 
             name="Friends"
             component={FriendsTab}
+            options={{ lazy: true }}
           />
           <Tab.Screen 
             name="Score"
             component={ScorecardTab}
+            options={{ lazy: true }}
           />
           <Tab.Screen 
             name="Map"
             component={MapTab}
+            options={{ lazy: true }}
           />
         </Tab.Navigator>
         

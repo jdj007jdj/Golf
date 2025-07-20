@@ -381,6 +381,46 @@ const CourseMapView = React.memo(({
     };
   }, []);
 
+  // Set up continuous location tracking for better accuracy
+  useEffect(() => {
+    if (!hasLocationPermission) return;
+
+    console.log('📍 Setting up continuous GPS tracking');
+    const watchId = Geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        if (isMountedRef.current) {
+          setUserLocation({
+            latitude,
+            longitude,
+            accuracy
+          });
+        }
+      },
+      (error) => {
+        console.error('GPS tracking error:', error);
+      },
+      {
+        enableHighAccuracy: true,
+        distanceFilter: 5, // Update every 5 meters
+        interval: 1000, // Update every second
+        fastestInterval: 1000,
+        forceRequestLocation: true,
+        showLocationDialog: true,
+        accuracy: {
+          android: 'high',
+          ios: 'best'
+        }
+      }
+    );
+
+    return () => {
+      if (watchId !== null) {
+        Geolocation.clearWatch(watchId);
+      }
+    };
+  }, [hasLocationPermission]);
+
   // Calculate map bounds for shot overlay
   const calculateMapBounds = useCallback((center, zoom) => {
     if (!center || center.length !== 2) return null;
@@ -695,10 +735,12 @@ const CourseMapView = React.memo(({
         onDidFinishLoadingMap={onMapReady}
         logoEnabled={false}
         attributionEnabled={false}
-        scrollEnabled={false}  // Disable native scrolling
-        zoomEnabled={true}     // Allow zoom
-        pitchEnabled={false}   // Disable pitch for now
-        rotateEnabled={false}  // Disable rotation for now
+        compassEnabled={false}  // Disable compass
+        scaleBarEnabled={false} // Disable scale bar
+        scrollEnabled={false}   // Disable native scrolling
+        zoomEnabled={false}     // Disable zoom gestures
+        pitchEnabled={false}    // Disable pitch for now
+        rotateEnabled={false}   // Disable rotation for now
         onRegionDidChange={onMapZoomChange}
       >
         <MapLibreGL.Camera
@@ -812,16 +854,21 @@ const CourseMapView = React.memo(({
         </View>
       </View>
 
-      {/* Debug info */}
-      <View style={styles.debugInfo}>
-        <Text style={styles.debugText}>Center: [{basePosition.center?.[0]?.toFixed(4) || 'N/A'}, {basePosition.center?.[1]?.toFixed(4) || 'N/A'}]</Text>
-        <Text style={styles.debugText}>Tiles: {tiles.length}</Text>
-        <Text style={styles.debugText}>Zoom: {basePosition.zoom?.toFixed(1) || 'N/A'}</Text>
-        {cacheStats && (
+      {/* GPS Info */}
+      <View style={styles.gpsInfo}>
+        <View style={styles.gpsHeader}>
+          <Text style={styles.gpsTitle}>📍 GPS</Text>
+          <View style={[styles.gpsStatusDot, { backgroundColor: userLocation ? '#4CAF50' : '#f44336' }]} />
+        </View>
+        {userLocation ? (
           <>
-            <Text style={styles.debugText}>Mem: {cacheStats.memoryCache.size}/{cacheStats.memoryCache.maxSize}</Text>
-            <Text style={styles.debugText}>Disk: {cacheStats.persistentCache.tileCount} ({(cacheStats.persistentCache.totalSize / 1024 / 1024).toFixed(1)}MB)</Text>
+            <Text style={styles.gpsText}>Accuracy: {userLocation.accuracy ? `±${Math.round(userLocation.accuracy)}m` : 'Unknown'}</Text>
+            <Text style={styles.gpsCoords}>
+              {userLocation.latitude ? userLocation.latitude.toFixed(6) : '--'}, {userLocation.longitude ? userLocation.longitude.toFixed(6) : '--'}
+            </Text>
           </>
+        ) : (
+          <Text style={styles.gpsText}>Acquiring...</Text>
         )}
       </View>
       
@@ -854,10 +901,11 @@ const CourseMapView = React.memo(({
       )}
 
 
-      {/* Zoom Controls */}
+      {/* Zoom Controls - disabled for now */}
       <View style={styles.zoomControls}>
         <TouchableOpacity
-          style={styles.zoomButton}
+          style={[styles.zoomButton, styles.zoomButtonDisabled]}
+          disabled={true}
           onPress={() => {
             const newZoom = Math.min(20, basePosition.zoom + 1);
             setBasePosition({ ...basePosition, zoom: newZoom });
@@ -871,10 +919,11 @@ const CourseMapView = React.memo(({
             }
           }}
         >
-          <Text style={styles.zoomButtonText}>+</Text>
+          <Text style={[styles.zoomButtonText, styles.zoomButtonTextDisabled]}>+</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.zoomButton}
+          style={[styles.zoomButton, styles.zoomButtonDisabled]}
+          disabled={true}
           onPress={() => {
             const newZoom = Math.max(10, basePosition.zoom - 1);
             setBasePosition({ ...basePosition, zoom: newZoom });
@@ -888,7 +937,7 @@ const CourseMapView = React.memo(({
             }
           }}
         >
-          <Text style={styles.zoomButtonText}>-</Text>
+          <Text style={[styles.zoomButtonText, styles.zoomButtonTextDisabled]}>-</Text>
         </TouchableOpacity>
       </View>
 
@@ -1061,19 +1110,47 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#666',
   },
-  debugInfo: {
+  gpsInfo: {
     position: 'absolute',
-    top: 60,
+    top: 90,
     right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: 8,
-    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 10,
+    borderRadius: 8,
     zIndex: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    minWidth: 120,
   },
-  debugText: {
-    color: 'white',
+  gpsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  gpsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  gpsStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  gpsText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  gpsCoords: {
     fontSize: 10,
-    marginBottom: 2,
+    color: '#999',
+    marginTop: 2,
+    fontFamily: 'monospace',
   },
   locationButton: {
     position: 'absolute',
@@ -1136,10 +1213,17 @@ const styles = StyleSheet.create({
     elevation: 5,
     marginBottom: 10,
   },
+  zoomButtonDisabled: {
+    backgroundColor: '#f0f0f0',
+    opacity: 0.5,
+  },
   zoomButtonText: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
+  },
+  zoomButtonTextDisabled: {
+    color: '#ccc',
   },
 });
 
