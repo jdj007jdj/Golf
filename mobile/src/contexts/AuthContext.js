@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG } from '../config/api';
+import localAuthService from '../services/localAuthService';
 
 const AuthContext = createContext({});
 
@@ -17,14 +18,45 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
+  const [accountType, setAccountType] = useState('online'); // 'local' or 'online'
+  const [isLocalAccount, setIsLocalAccount] = useState(false);
 
   // Check for stored auth on app start
   useEffect(() => {
-    checkAuthStatus();
+    initializeAuth();
   }, []);
+  
+  const initializeAuth = async () => {
+    await localAuthService.initialize();
+    await checkAuthStatus();
+  };
 
   const checkAuthStatus = async () => {
     try {
+      // First check for local account
+      const localToken = await AsyncStorage.getItem('local_auth_token');
+      const localUsername = await AsyncStorage.getItem('local_current_user');
+      
+      if (localToken && localUsername) {
+        const userData = await localAuthService.getLocalUser(localUsername);
+        if (userData) {
+          setToken(localToken);
+          setUser({
+            id: userData.id,
+            username: userData.username,
+            email: userData.email,
+            accountType: 'local',
+            stats: userData.stats
+          });
+          setAccountType('local');
+          setIsLocalAccount(true);
+          setIsAuthenticated(true);
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // Check for online account
       const storedToken = await AsyncStorage.getItem('authToken');
       const storedUser = await AsyncStorage.getItem('userData');
       
@@ -45,6 +77,8 @@ export const AuthProvider = ({ children }) => {
         if (response.ok) {
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
+          setAccountType('online');
+          setIsLocalAccount(false);
           setIsAuthenticated(true);
         } else {
           // Token expired or invalid
@@ -98,6 +132,8 @@ export const AuthProvider = ({ children }) => {
         
         setToken(authToken);
         setUser(userData);
+        setAccountType('online');
+        setIsLocalAccount(false);
         setIsAuthenticated(true);
         
         return { success: true };
@@ -157,15 +193,124 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      // Clear stored auth data
-      await AsyncStorage.removeItem('authToken');
-      await AsyncStorage.removeItem('userData');
+      if (isLocalAccount) {
+        // Logout local account
+        await localAuthService.logoutLocal();
+      } else {
+        // Clear online auth data
+        await AsyncStorage.removeItem('authToken');
+        await AsyncStorage.removeItem('userData');
+      }
       
       setToken(null);
       setUser(null);
+      setAccountType('online');
+      setIsLocalAccount(false);
       setIsAuthenticated(false);
     } catch (error) {
       console.error('Logout error:', error);
+    }
+  };
+  
+  // Login with local account
+  const loginLocal = async (username, password) => {
+    console.log('🔐 Starting local login...');
+    
+    const result = await localAuthService.authenticateLocal(username, password);
+    
+    if (result.success) {
+      setToken(result.token);
+      setUser(result.user);
+      setAccountType('local');
+      setIsLocalAccount(true);
+      setIsAuthenticated(true);
+    }
+    
+    return result;
+  };
+  
+  // Create local account
+  const createLocalAccount = async (username, password) => {
+    console.log('📝 Creating local account...');
+    
+    const result = await localAuthService.createLocalUser(username, password);
+    
+    if (result.success) {
+      // Auto-login after creation
+      return await loginLocal(username, password);
+    }
+    
+    return result;
+  };
+  
+  // Convert local account to online
+  const convertToOnline = async (email, password) => {
+    console.log('🔄 Converting local account to online...');
+    
+    if (!isLocalAccount || !user) {
+      return { success: false, error: 'No local account to convert' };
+    }
+    
+    try {
+      // Get local data for conversion
+      const localData = await localAuthService.getLocalDataForConversion(user.username);
+      if (!localData) {
+        return { success: false, error: 'Failed to get local data' };
+      }
+      
+      // Call backend API to create online account and start conversion
+      const response = await fetch(API_CONFIG.BASE_URL + '/api/auth/convert-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: user.username,
+          email,
+          password,
+          deviceId: localData.deviceId,
+          localData: {
+            rounds: localData.rounds.length,
+            shots: localData.shots.length,
+            games: localData.games.length
+          }
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        const { token: authToken, user: userData, conversionId } = data.data;
+        
+        // Update auth state to online
+        await AsyncStorage.setItem('authToken', authToken);
+        await AsyncStorage.setItem('userData', JSON.stringify(userData));
+        
+        setToken(authToken);
+        setUser(userData);
+        setAccountType('online');
+        setIsLocalAccount(false);
+        
+        // Queue local data for sync using existing services
+        // This will be handled by the conversion service
+        
+        return { 
+          success: true, 
+          conversionId,
+          localData
+        };
+      } else {
+        return { 
+          success: false, 
+          error: data.error?.message || 'Conversion failed' 
+        };
+      }
+    } catch (error) {
+      console.error('❌ Conversion error:', error);
+      return { 
+        success: false, 
+        error: 'Network error. Please check your connection.' 
+      };
     }
   };
 
@@ -174,9 +319,14 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     user,
     token,
+    accountType,
+    isLocalAccount,
     login,
+    loginLocal,
+    createLocalAccount,
     register,
     logout,
+    convertToOnline,
     checkAuthStatus,
   };
 

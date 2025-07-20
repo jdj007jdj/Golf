@@ -23,6 +23,9 @@ model User {
   homeCourseId    String?  @map("home_course_id") @db.Uuid
   preferences     Json     @default("{}")
   subscriptionTier String  @default("free") @map("subscription_tier")
+  accountType      String   @default("online") @map("account_type") // "local" or "online"
+  localDeviceId    String?  @map("local_device_id") // Original device ID for converted accounts
+  convertedAt      DateTime? @map("converted_at") // When account was converted
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
   lastSyncAt      DateTime? @map("last_sync_at")
@@ -42,6 +45,7 @@ model User {
   clubPerformances     ClubPerformance[] @relation("UserClubPerformance")
   localFriends         LocalFriend[]
   linkedAsLocalFriend  LocalFriend[] @relation("LinkedLocalFriend")
+  accountConversions   AccountConversion[]
 
   @@map("users")
 }
@@ -421,4 +425,23 @@ model LocalFriend {
   linkedUser User? @relation("LinkedLocalFriend", fields: [linkedUserId], references: [id])
 
   @@map("local_friends")
+}
+
+// Account conversion tracking
+model AccountConversion {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  localDeviceId    String   @map("local_device_id")
+  dataSnapshot     Json     @map("data_snapshot") // Backup of what was converted
+  roundsConverted  Int      @map("rounds_converted")
+  shotsConverted   Int      @map("shots_converted")
+  gamesConverted   Int      @map("games_converted")
+  status           String   @default("pending") // pending, in_progress, completed, failed
+  startedAt        DateTime @default(now()) @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  error            String?
+  
+  user User @relation(fields: [userId], references: [id])
+  
+  @@map("account_conversions")
 }

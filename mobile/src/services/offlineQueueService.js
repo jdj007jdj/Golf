@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { API_CONFIG } from '../config/api';
 import syncResultTracker from './syncResultTracker';
+import localAuthService from './localAuthService';
 
 class OfflineQueueService {
   constructor() {
@@ -75,6 +76,13 @@ class OfflineQueueService {
   }
 
   async addToQueue(type, data, priority = 'normal') {
+    // Check if local account - don't queue for local accounts
+    const isLocal = await localAuthService.isLocalAccount();
+    if (isLocal) {
+      console.log('📱 Local account detected, not queueing for sync');
+      return;
+    }
+    
     const item = {
       id: Date.now().toString(),
       type,
@@ -97,6 +105,13 @@ class OfflineQueueService {
   }
 
   async syncQueue() {
+    // Check if local account - don't sync for local accounts
+    const isLocal = await localAuthService.isLocalAccount();
+    if (isLocal) {
+      console.log('📱 Local account detected, skipping sync');
+      return;
+    }
+    
     if (this.syncInProgress || !this.isOnline || this.queue.length === 0) {
       return;
     }

@@ -18,7 +18,7 @@ import persistentTileCache from '../../utils/persistentTileCache';
 import shotTrackingService from '../../services/shotTrackingService';
 
 const SettingsScreen = ({ navigation }) => {
-  const { user, logout, token } = useAuth();
+  const { user, logout, token, accountType, isLocalAccount, convertToOnline } = useAuth();
   const { settings, updateSettings } = useSettings();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -59,6 +59,10 @@ const SettingsScreen = ({ navigation }) => {
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncInProgress, setSyncInProgress] = useState(false);
   
+  // Local account conversion state
+  const [isConverting, setIsConverting] = useState(false);
+  const [localDataStats, setLocalDataStats] = useState(null);
+  
   // GPS Shot Tracking Settings
   const [isShotTrackingEnabled, setIsShotTrackingEnabled] = useState(
     settings.shotTracking?.enabled ?? true
@@ -84,10 +88,35 @@ const SettingsScreen = ({ navigation }) => {
       
       // Load sync status
       await loadSyncStatus();
+      
+      // Load local data stats if local account
+      if (isLocalAccount) {
+        await loadLocalDataStats();
+      }
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const loadLocalDataStats = async () => {
+    try {
+      const roundsData = await AsyncStorage.getItem(`local_rounds_${user?.id}`);
+      const shotsData = await AsyncStorage.getItem(`local_shots_${user?.id}`);
+      const gamesData = await AsyncStorage.getItem(`local_games_${user?.id}`);
+      
+      const rounds = roundsData ? JSON.parse(roundsData) : [];
+      const shots = shotsData ? JSON.parse(shotsData) : [];
+      const games = gamesData ? JSON.parse(gamesData) : [];
+      
+      setLocalDataStats({
+        rounds: rounds.length,
+        shots: shots.length,
+        games: games.length
+      });
+    } catch (error) {
+      console.error('Error loading local data stats:', error);
     }
   };
   
@@ -307,6 +336,22 @@ const SettingsScreen = ({ navigation }) => {
       ]
     );
   };
+  
+  const handleConvertToOnline = () => {
+    Alert.alert(
+      'Convert to Online Account',
+      `This will upload your local data to the cloud:\n\n• ${localDataStats?.rounds || 0} rounds\n• ${localDataStats?.shots || 0} shots\n• ${localDataStats?.games || 0} games\n\nYou'll need to provide an email and password for your online account.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Continue', 
+          onPress: () => {
+            navigation.navigate('ConvertAccount', { localDataStats });
+          }
+        },
+      ]
+    );
+  };
 
   const renderSectionHeader = (title) => (
     <Text style={styles.sectionHeader}>{title}</Text>
@@ -377,12 +422,54 @@ const SettingsScreen = ({ navigation }) => {
       </View>
       
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Account Type Section */}
+        {renderSectionHeader('Account Type')}
+        <View style={styles.section}>
+          <View style={styles.accountTypeCard}>
+            <View style={styles.accountTypeHeader}>
+              <Text style={styles.accountTypeLabel}>
+                {isLocalAccount ? '📱 Local Device Only' : '☁️ Online Account'}
+              </Text>
+              <Text style={styles.accountTypeValue}>{user?.username || 'Unknown'}</Text>
+            </View>
+            {isLocalAccount && (
+              <>
+                <Text style={styles.accountTypeDescription}>
+                  Your data is stored only on this device
+                </Text>
+                {localDataStats && (
+                  <View style={styles.localDataStats}>
+                    <Text style={styles.localDataLabel}>Local Data:</Text>
+                    <Text style={styles.localDataValue}>
+                      {localDataStats.rounds} rounds, {localDataStats.shots} shots, {localDataStats.games} games
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity 
+                  style={styles.convertButton}
+                  onPress={handleConvertToOnline}
+                  disabled={isConverting}
+                >
+                  <Text style={styles.convertButtonText}>
+                    {isConverting ? 'Converting...' : 'Convert to Online Account'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {!isLocalAccount && (
+              <Text style={styles.accountTypeDescription}>
+                Your data is backed up to the cloud
+              </Text>
+            )}
+          </View>
+        </View>
+        
         {/* User Profile Section */}
         {renderSectionHeader('User Profile')}
         <View style={styles.section}>
-          {renderTextInput('First Name', firstName, setFirstName, 'Enter first name')}
-          {renderTextInput('Last Name', lastName, setLastName, 'Enter last name')}
-          {renderTextInput('Email', email, setEmail, 'Enter email', 'email-address')}
+          {!isLocalAccount && renderTextInput('First Name', firstName, setFirstName, 'Enter first name')}
+          {!isLocalAccount && renderTextInput('Last Name', lastName, setLastName, 'Enter last name')}
+          {!isLocalAccount && renderTextInput('Email', email, setEmail, 'Enter email', 'email-address')}
           {renderTextInput('Handicap', handicap, setHandicap, 'Enter handicap (optional)', 'decimal-pad')}
         </View>
 
@@ -541,9 +628,11 @@ const SettingsScreen = ({ navigation }) => {
           )}
         </View>
 
-        {/* Data Sync Section */}
-        {renderSectionHeader('Data Sync')}
-        <View style={styles.section}>
+        {/* Data Sync Section - Only for online accounts */}
+        {!isLocalAccount && (
+          <>
+            {renderSectionHeader('Data Sync')}
+            <View style={styles.section}>
           <TouchableOpacity 
             style={[styles.syncButton, syncInProgress && styles.syncButtonDisabled]} 
             onPress={handleSyncNow}
@@ -633,6 +722,8 @@ const SettingsScreen = ({ navigation }) => {
             </View>
           )}
         </View>
+          </>
+        )}
 
         {/* Account Section */}
         {renderSectionHeader('Account')}
@@ -1027,6 +1118,57 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  accountTypeCard: {
+    padding: 16,
+  },
+  accountTypeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  accountTypeLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  accountTypeValue: {
+    fontSize: 16,
+    color: '#666666',
+  },
+  accountTypeDescription: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 12,
+  },
+  localDataStats: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  localDataLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666666',
+    marginBottom: 4,
+  },
+  localDataValue: {
+    fontSize: 14,
+    color: '#1A1A1A',
+  },
+  convertButton: {
+    backgroundColor: '#2E7D32',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  convertButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

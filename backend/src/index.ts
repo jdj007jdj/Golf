@@ -30,6 +30,7 @@ import courseRoutes from '@/routes/courseRoutes';
 import roundRoutes from '@/routes/roundRoutes';
 import syncRoutes from '@/routes/syncRoutes';
 import gameRoutes from '@/routes/gameRoutes';
+import conversionRoutes from '@/routes/conversionRoutes';
 
 /**
  * Create Express application
@@ -123,6 +124,7 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/rounds', roundRoutes);
 app.use('/api/sync', authMiddleware, syncRoutes);
 app.use('/api/games', authMiddleware, gameRoutes);
+app.use('/api', conversionRoutes); // Conversion routes include both /auth and /conversion paths
 
 /**
  * WebSocket setup

@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Auth screens
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import ConvertAccountScreen from '../screens/auth/ConvertAccountScreen';
 
 // Main app screens
 import HomeScreen from '../screens/main/HomeScreen';
@@ -32,6 +33,7 @@ const AuthStack = () => {
     >
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ConvertAccount" component={ConvertAccountScreen} />
     </Stack.Navigator>
   );
 };
@@ -62,6 +64,7 @@ const MainStack = ({ initialRouteName, initialParams }) => {
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Statistics" component={StatisticsScreen} />
       <Stack.Screen name="CourseDownload" component={CourseDownloadScreen} />
+      <Stack.Screen name="ConvertAccount" component={ConvertAccountScreen} />
     </Stack.Navigator>
   );
 };

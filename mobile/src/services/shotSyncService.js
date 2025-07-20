@@ -8,7 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG } from '../config/api';
 import offlineQueueService from './offlineQueueService';
-import { useAuth } from '../contexts/AuthContext';
+import localAuthService from './localAuthService';
 
 class ShotSyncService {
   constructor() {
@@ -60,6 +60,13 @@ class ShotSyncService {
   async syncPendingShots() {
     try {
       console.log('🔄 Starting pending shots sync...');
+      
+      // Check if local account - don't sync for local accounts
+      const isLocal = await localAuthService.isLocalAccount();
+      if (isLocal) {
+        console.log('📱 Local account detected, skipping sync');
+        return;
+      }
       
       // Get auth token (would need to be passed in or accessed from context)
       const token = await this.getAuthToken();
@@ -239,6 +246,12 @@ class ShotSyncService {
 
   async getAuthToken() {
     try {
+      // First check if it's a local account
+      const isLocal = await localAuthService.isLocalAccount();
+      if (isLocal) {
+        return null; // No sync for local accounts
+      }
+      
       // Check both AsyncStorage and the standard auth_token key
       let token = await AsyncStorage.getItem('auth_token');
       console.log('🔍 Checking auth_token:', token ? 'found' : 'not found');
