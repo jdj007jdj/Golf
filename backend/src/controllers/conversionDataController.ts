@@ -7,7 +7,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { logger } from '@/utils/logger';
-import { authenticateToken } from '@/middleware/auth';
+import { authMiddleware } from '@/middleware/authMiddleware';
 
 const prisma = new PrismaClient();
 
@@ -173,7 +173,7 @@ export async function uploadConversionData(req: Request & { user?: any }, res: R
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid upload data',
-          details: error.errors
+          details: error.issues
         }
       });
     }
@@ -266,7 +266,7 @@ export async function getConversionStatus(req: Request & { user?: any }, res: Re
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid conversion ID',
-          details: error.errors
+          details: error.issues
         }
       });
     }
@@ -349,7 +349,7 @@ export async function updateConversionStatus(req: Request & { user?: any }, res:
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid status update',
-          details: error.errors
+          details: error.issues
         }
       });
     }
@@ -374,34 +374,49 @@ async function processRounds(userId: string, rounds: any[]): Promise<{ processed
 
   for (const round of rounds) {
     try {
-      // Validate and transform round data
-      const roundData = {
-        userId,
-        courseId: round.courseId,
-        teeBoxId: round.teeBoxId,
-        startedAt: new Date(round.startedAt),
-        completedAt: round.completedAt ? new Date(round.completedAt) : undefined,
-        weather: round.weather || {},
-        notes: round.notes || ''
-      };
-
       // Create round
       const createdRound = await prisma.round.create({
-        data: roundData
+        data: {
+          courseId: round.courseId,
+          teeBoxId: round.teeBoxId,
+          startedAt: new Date(round.startedAt),
+          finishedAt: round.completedAt ? new Date(round.completedAt) : undefined,
+          weatherConditions: round.weather || {},
+          roundType: round.roundType || 'casual'
+        }
+      });
+
+      // Create round participant for the user
+      const participant = await prisma.roundParticipant.create({
+        data: {
+          roundId: createdRound.id,
+          userId: userId,
+          teeBoxId: round.teeBoxId,
+          isScorer: true
+        }
       });
 
       // Create hole scores if provided
-      if (round.scores) {
-        const holeScores = Object.entries(round.scores).map(([holeNumber, score]) => ({
-          roundId: createdRound.id,
-          holeNumber: parseInt(holeNumber),
-          score: score as number,
-          putts: round.putts?.[holeNumber] || 0
-        }));
+      if (round.scores && round.holes) {
+        const holeScores = [];
+        for (const [holeNumber, score] of Object.entries(round.scores)) {
+          const hole = round.holes.find((h: any) => h.holeNumber === parseInt(holeNumber));
+          if (hole) {
+            holeScores.push({
+              roundParticipantId: participant.id,
+              holeId: hole.id,
+              score: score as number,
+              putts: (round.putts && round.putts[holeNumber]) || 0,
+              updatedBy: userId
+            });
+          }
+        }
 
-        await prisma.holeScore.createMany({
-          data: holeScores
-        });
+        if (holeScores.length > 0) {
+          await prisma.holeScore.createMany({
+            data: holeScores
+          });
+        }
       }
 
       processed++;
@@ -425,7 +440,7 @@ async function processShots(userId: string, shots: any[]): Promise<{ processed: 
   const errors: any[] = [];
 
   // Group shots by round for efficiency
-  const shotsByRound = shots.reduce((acc, shot) => {
+  const shotsByRound = shots.reduce((acc: Record<string, any[]>, shot: any) => {
     if (!acc[shot.roundId]) acc[shot.roundId] = [];
     acc[shot.roundId].push(shot);
     return acc;
@@ -433,11 +448,22 @@ async function processShots(userId: string, shots: any[]): Promise<{ processed: 
 
   for (const [roundId, roundShots] of Object.entries(shotsByRound)) {
     try {
-      // Verify round exists and belongs to user
+      // Verify round exists and user is a participant
       const round = await prisma.round.findFirst({
         where: {
           id: roundId,
-          userId
+          participants: {
+            some: {
+              userId: userId
+            }
+          }
+        },
+        include: {
+          participants: {
+            where: {
+              userId: userId
+            }
+          }
         }
       });
 
@@ -449,18 +475,27 @@ async function processShots(userId: string, shots: any[]): Promise<{ processed: 
         continue;
       }
 
+      // Get participant
+      const participant = round.participants[0];
+      if (!participant) {
+        errors.push({
+          roundId,
+          error: 'No participant found for user'
+        });
+        continue;
+      }
+
       // Create shots
-      const shotData = roundShots.map(shot => ({
-        roundId: round.id,
-        holeNumber: shot.holeNumber,
+      const shotData = roundShots.map((shot: any) => ({
+        roundParticipantId: participant.id,
+        holeId: shot.holeId,
         shotNumber: shot.shotNumber,
         clubId: shot.clubId,
-        startLatitude: shot.startLatitude,
-        startLongitude: shot.startLongitude,
-        endLatitude: shot.endLatitude,
-        endLongitude: shot.endLongitude,
-        distance: shot.distance,
-        createdAt: new Date(shot.timestamp || shot.createdAt)
+        startPosition: `POINT(${shot.startLongitude} ${shot.startLatitude})`,
+        endPosition: `POINT(${shot.endLongitude} ${shot.endLatitude})`,
+        distanceYards: shot.distance,
+        lieType: shot.lieType || 'fairway',
+        shotType: shot.shotType || 'full'
       }));
 
       await prisma.shot.createMany({
@@ -490,11 +525,15 @@ async function processGames(userId: string, games: any[]): Promise<{ processed: 
 
   for (const game of games) {
     try {
-      // Verify round exists and belongs to user
+      // Verify round exists and user is a participant
       const round = await prisma.round.findFirst({
         where: {
           id: game.roundId,
-          userId
+          participants: {
+            some: {
+              userId: userId
+            }
+          }
         }
       });
 
@@ -509,28 +548,37 @@ async function processGames(userId: string, games: any[]): Promise<{ processed: 
       // Create game
       const createdGame = await prisma.game.create({
         data: {
-          name: game.gameConfig?.name || 'Converted Game',
-          type: game.gameConfig?.type || 'stroke_play',
-          config: game.gameConfig || {},
-          startedAt: new Date(game.startedAt),
-          completedAt: game.completedAt ? new Date(game.completedAt) : undefined
+          roundId: game.roundId,
+          gameType: game.gameConfig?.type || 'stroke',
+          settings: game.gameConfig || {},
+          status: game.completedAt ? 'completed' : 'active'
         }
       });
 
-      // Create round participants
+      // Get or create round participants
       if (game.players) {
         for (const player of game.players) {
-          const participant = await prisma.roundParticipant.create({
-            data: {
+          // Find existing participant or create guest
+          let participant = await prisma.roundParticipant.findFirst({
+            where: {
               roundId: round.id,
-              userId: player.userId || userId,
-              localPlayerName: player.name,
-              status: 'completed'
+              userId: player.userId || userId
             }
           });
 
+          if (!participant && player.isGuest) {
+            participant = await prisma.roundParticipant.create({
+              data: {
+                roundId: round.id,
+                guestName: player.name,
+                guestHandicap: player.handicap,
+                teeBoxId: game.teeBoxId || round.teeBoxId
+              }
+            });
+          }
+
           // Create game scores
-          if (game.playerScores?.[player.id]) {
+          if (participant && game.playerScores?.[player.id]) {
             const scores = game.playerScores[player.id];
             for (const [holeNumber, score] of Object.entries(scores)) {
               await prisma.gameScore.create({
@@ -538,7 +586,7 @@ async function processGames(userId: string, games: any[]): Promise<{ processed: 
                   gameId: createdGame.id,
                   roundParticipantId: participant.id,
                   holeNumber: parseInt(holeNumber as string),
-                  score: score as number
+                  scoreData: { score: score as number }
                 }
               });
             }

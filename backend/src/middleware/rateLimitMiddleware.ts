@@ -6,6 +6,15 @@
 import rateLimit from 'express-rate-limit';
 import { Request, Response } from 'express';
 
+// Extend Express Request interface to include rateLimit info
+declare module 'express' {
+  interface Request {
+    rateLimit?: {
+      resetTime?: Date;
+    };
+  }
+}
+
 /**
  * Create rate limit middleware with custom options
  */

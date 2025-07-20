@@ -48,7 +48,8 @@ router.get('/', authMiddleware, [
               }
             }
           }
-        },
+        }
+      },
       orderBy: {
         startedAt: 'desc'
       }
@@ -109,6 +110,7 @@ router.get('/:id', authMiddleware, [
             }
           }
         }
+      }
     });
 
     if (!round) {
@@ -252,6 +254,7 @@ router.put('/:id/complete', authMiddleware, [
             }
           }
         }
+      }
     });
 
     const participants = (round as any).participants || [];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useSettings } from '../../../contexts/SettingsContext';
@@ -84,9 +85,25 @@ const ScorecardContainer = ({ route, navigation }) => {
   const [courseStats, setCourseStats] = useState(null);
   // showClubModal removed - using SmartClubSelector now
   const [expandedCategories, setExpandedCategories] = useState({});
+  const [stateRestored, setStateRestored] = useState(false);
   
-  // Storage key for this specific round
+  // Refs to track latest state values for saving
+  const scoresRef = useRef(scores);
+  const puttsRef = useRef(putts);
+  const clubsRef = useRef(clubs);
+  const currentHoleRef = useRef(currentHole);
+  
+  // Update refs when state changes
+  useEffect(() => {
+    scoresRef.current = scores;
+    puttsRef.current = putts;
+    clubsRef.current = clubs;
+    currentHoleRef.current = currentHole;
+  }, [scores, putts, clubs, currentHole]);
+  
+  // Storage keys for this specific round
   const STORAGE_KEY = `golf_round_${round?.id || 'temp'}_scores`;
+  const STATE_STORAGE_KEY = `golf_round_${round?.id || 'temp'}_state`;
   
   // Get holes from course data, fallback to default 18 holes
   const holes = course.holes || Array.from({ length: 18 }, (_, i) => ({
@@ -100,28 +117,36 @@ const ScorecardContainer = ({ route, navigation }) => {
   // Initialize component
   useEffect(() => {
     console.log('[ScorecardContainer] Component mounting');
-    loadScores();
-    loadHistoricalData();
-    loadCourseSettings();
+    // Always try to load saved state first
+    const initializeState = async () => {
+      await loadScores();
+      await loadHistoricalData();
+      await loadCourseSettings();
+    };
+    initializeState();
     
     return () => {
       console.log('[ScorecardContainer] Component unmounting');
+      // Force save state before unmounting using refs
+      saveScores();
     };
-  }, []);
+  }, [round?.id]); // Re-initialize if round ID changes
 
   // Save scores to AsyncStorage whenever scores change
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && stateRestored) {
       saveScores();
     }
-  }, [scores, putts, clubs, isLoading]);
+  }, [scores, putts, clubs, currentHole, isLoading, stateRestored]);
 
   // Handle app state changes (background/foreground)
   useEffect(() => {
     const handleAppStateChange = (nextAppState) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
+        console.log('[ScorecardContainer] App going to background, saving state');
         saveScores();
       } else if (nextAppState === 'active') {
+        console.log('[ScorecardContainer] App coming to foreground, loading state');
         loadScores();
       }
     };
@@ -130,17 +155,48 @@ const ScorecardContainer = ({ route, navigation }) => {
     return () => subscription?.remove();
   }, []);
 
+  // Reload state when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('[ScorecardContainer] Screen focused, reloading state');
+      loadScores();
+      return () => {
+        console.log('[ScorecardContainer] Screen losing focus, saving state');
+        saveScores();
+      };
+    }, [])
+  );
+
   // Load scores from AsyncStorage
   const loadScores = async () => {
     try {
       const savedData = await AsyncStorage.getItem(STORAGE_KEY);
       if (savedData) {
         const parsedData = JSON.parse(savedData);
-        setScores(parsedData.scores || {});
-        setPutts(parsedData.putts || {});
-        setClubs(parsedData.clubs || {});
-        setCurrentHole(parsedData.currentHole || 1);
+        
+        // Only update state if we have actual data or if current state is empty
+        const hasCurrentScores = Object.keys(scoresRef.current).length > 0;
+        const hasSavedScores = Object.keys(parsedData.scores || {}).length > 0;
+        
+        // Don't overwrite existing scores with empty saved data
+        if (!hasCurrentScores || hasSavedScores) {
+          setScores(parsedData.scores || {});
+          setPutts(parsedData.putts || {});
+          setClubs(parsedData.clubs || {});
+          setCurrentHole(parsedData.currentHole || 1);
+          
+          console.log('[ScorecardContainer] Restored state:', {
+            currentHole: parsedData.currentHole || 1,
+            scoresCount: Object.keys(parsedData.scores || {}).length,
+            puttsCount: Object.keys(parsedData.putts || {}).length,
+            hadCurrentScores: hasCurrentScores,
+            hasSavedScores: hasSavedScores
+          });
+        } else {
+          console.log('[ScorecardContainer] Skipped restore - would overwrite existing scores with empty data');
+        }
       }
+      setStateRestored(true);
     } catch (error) {
       console.error('Error loading scores:', error);
     } finally {
@@ -152,12 +208,17 @@ const ScorecardContainer = ({ route, navigation }) => {
   const saveScores = async () => {
     try {
       const dataToSave = {
-        scores,
-        putts,
-        clubs,
-        currentHole,
+        scores: scoresRef.current,
+        putts: puttsRef.current,
+        clubs: clubsRef.current,
+        currentHole: currentHoleRef.current,
         lastUpdated: new Date().toISOString(),
       };
+      console.log('[ScorecardContainer] Saving state:', {
+        currentHole: currentHoleRef.current,
+        scoresCount: Object.keys(scoresRef.current).length,
+        puttsCount: Object.keys(puttsRef.current).length
+      });
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     } catch (error) {
       console.error('Error saving scores:', error);
@@ -291,6 +352,7 @@ const ScorecardContainer = ({ route, navigation }) => {
         
         <Tab.Navigator
           key={round?.id || 'scorecard-tabs'}
+          initialRouteName="Score"
           screenOptions={{
             tabBarActiveTintColor: '#2e7d32',
             tabBarInactiveTintColor: '#666',

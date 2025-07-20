@@ -80,7 +80,7 @@ export async function checkUsernameAvailability(req: Request, res: Response) {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid username format',
-          details: error.errors
+          details: error.issues
         }
       });
     }
@@ -192,7 +192,7 @@ export async function convertAccount(req: Request, res: Response) {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid conversion data',
-          details: error.errors
+          details: error.issues
         }
       });
     }
