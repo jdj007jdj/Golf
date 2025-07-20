@@ -15,7 +15,8 @@ const ShotOverlay = ({
   mapBounds, 
   currentHole,
   settings,
-  onShotPress 
+  onShotPress,
+  calibrationOffset = { lat: 0, lng: 0 }
 }) => {
   // Filter shots for current hole
   const holeShots = useMemo(() => {
@@ -31,9 +32,13 @@ const ShotOverlay = ({
     
     const { north, south, east, west } = mapBounds;
     
+    // Apply calibration offset
+    const calibratedLat = latitude + calibrationOffset.lat;
+    const calibratedLng = longitude + calibrationOffset.lng;
+    
     // Calculate relative position (0-1)
-    const relX = (longitude - west) / (east - west);
-    const relY = 1 - (latitude - south) / (north - south); // Invert Y axis
+    const relX = (calibratedLng - west) / (east - west);
+    const relY = 1 - (calibratedLat - south) / (north - south); // Invert Y axis
     
     // Convert to screen coordinates
     const screenX = relX * width;

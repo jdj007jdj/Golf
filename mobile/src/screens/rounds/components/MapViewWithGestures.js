@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   PanResponder,
   Animated,
+  Alert,
 } from 'react-native';
 import MapLibreGL from '@maplibre/maplibre-react-native';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
@@ -20,6 +21,7 @@ import persistentTileCache from '../../../utils/persistentTileCache';
 import shotTrackingService from '../../../services/shotTrackingService';
 import ShotOverlay from './ShotOverlay';
 import { calculateDistance, formatDistance } from '../../../utils/gpsCalculations';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Set access token to null (MapLibre doesn't require it)
 MapLibreGL.setAccessToken(null);
@@ -61,6 +63,8 @@ const CourseMapView = React.memo(({
   const [cacheStats, setCacheStats] = useState(null);
   const [shots, setShots] = useState([]);
   const [showShots, setShowShots] = useState(true);
+  const [calibrationMode, setCalibrationMode] = useState(false);
+  const [calibrationOffset, setCalibrationOffset] = useState({ lat: 0, lng: 0 });
   const [mapBounds, setMapBounds] = useState(null);
   const [currentDistances, setCurrentDistances] = useState(null);
   
@@ -101,10 +105,55 @@ const CourseMapView = React.memo(({
     : null; // Don't default to Augusta
 
   // Create a transparent overlay to capture gestures
-  const panResponder = useRef(
+  const panResponder = useMemo(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onPanResponderEnd: (evt) => {
+        console.log('🎯 PanResponder onEnd triggered', {
+          calibrationMode,
+          hasMapBounds: !!mapBounds,
+          hasUserLocation: !!userLocation
+        });
+        
+        // Handle calibration tap
+        if (calibrationMode && mapBounds && userLocation) {
+          // Get touch coordinates
+          const touchX = evt.nativeEvent.locationX;
+          const touchY = evt.nativeEvent.locationY;
+          
+          console.log('📍 Touch coordinates:', { touchX, touchY });
+          console.log('🗺️ Map bounds:', mapBounds);
+          console.log('📍 User location:', userLocation);
+          
+          // Convert screen coordinates to GPS
+          const touchLng = mapBounds.west + (touchX / width) * (mapBounds.east - mapBounds.west);
+          const touchLat = mapBounds.south + (1 - touchY / height) * (mapBounds.north - mapBounds.south);
+          
+          console.log('🌍 Calculated GPS coordinates:', { touchLat, touchLng });
+          
+          // Calculate offset
+          const latOffset = touchLat - userLocation.latitude;
+          const lngOffset = touchLng - userLocation.longitude;
+          
+          console.log('📏 Calculated offset:', { latOffset, lngOffset });
+          
+          setCalibrationOffset({ lat: latOffset, lng: lngOffset });
+          setCalibrationMode(false); // Exit calibration mode after setting
+          
+          Alert.alert(
+            'Calibration Updated',
+            `GPS Offset:\nLatitude: ${latOffset > 0 ? '+' : ''}${(latOffset * 111111).toFixed(1)}m\nLongitude: ${lngOffset > 0 ? '+' : ''}${(lngOffset * 111111 * Math.cos(userLocation.latitude * Math.PI / 180)).toFixed(1)}m`,
+            [
+              { text: 'Reset', onPress: () => {
+                setCalibrationOffset({ lat: 0, lng: 0 });
+                setCalibrationMode(false);
+              }, style: 'destructive' },
+              { text: 'OK', style: 'default' }
+            ]
+          );
+        }
+      },
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponderCapture: () => true,
       
@@ -223,8 +272,9 @@ const CourseMapView = React.memo(({
           isPanningRef.current = false;
         }
       }
-    })
-  ).current;
+    }),
+    [calibrationMode, mapBounds, userLocation, setCalibrationOffset, setCalibrationMode]
+  );
 
   // Initialize persistent cache and update stats periodically
   useEffect(() => {
@@ -283,6 +333,11 @@ const CourseMapView = React.memo(({
   // Update distances periodically
   useEffect(() => {
     const updateDistances = async () => {
+      // Only try to get distances if we have location permission
+      if (!hasLocationPermission) {
+        return;
+      }
+      
       try {
         const distances = await shotTrackingService.getCurrentDistances(currentHole);
         setCurrentDistances(distances);
@@ -296,7 +351,7 @@ const CourseMapView = React.memo(({
     const interval = setInterval(updateDistances, 5000);
     
     return () => clearInterval(interval);
-  }, [currentHole]);
+  }, [currentHole, hasLocationPermission]);
 
   // Initialize and request permissions
   useEffect(() => {
@@ -545,10 +600,47 @@ const CourseMapView = React.memo(({
       updateTiles(centerCoordinate, 18);
     }
   }, [centerCoordinate, updateTiles, basePosition.center, basePosition.zoom]);
+  
+  // Load saved calibration on mount
+  useEffect(() => {
+    const loadCalibration = async () => {
+      try {
+        const saved = await AsyncStorage.getItem('gps_calibration_offset');
+        if (saved) {
+          const offset = JSON.parse(saved);
+          setCalibrationOffset(offset);
+          console.log('🎯 Loaded GPS calibration:', offset);
+        }
+      } catch (error) {
+        console.error('Error loading calibration:', error);
+      }
+    };
+    loadCalibration();
+  }, []);
+  
+  // Save calibration when it changes
+  useEffect(() => {
+    if (calibrationOffset.lat !== 0 || calibrationOffset.lng !== 0) {
+      AsyncStorage.setItem('gps_calibration_offset', JSON.stringify(calibrationOffset))
+        .catch(error => console.error('Error saving calibration:', error));
+    }
+  }, [calibrationOffset]);
 
   const onUserLocationUpdate = (location) => {
     console.log('📍 User location updated:', location);
-    setUserLocation(location);
+    // Validate location data
+    if (location && location.coords) {
+      const { latitude, longitude, accuracy } = location.coords;
+      if (!isNaN(latitude) && !isNaN(longitude)) {
+        setUserLocation({
+          latitude,
+          longitude,
+          accuracy
+        });
+      } else {
+        console.error('Invalid location coordinates:', location);
+      }
+    }
   };
 
   const flyToLocation = (longitude, latitude, zoom = 18) => {
@@ -723,8 +815,11 @@ const CourseMapView = React.memo(({
             currentHole={currentHole}
             settings={settings}
             onShotPress={(shot) => console.log('Shot pressed:', shot)}
+            calibrationOffset={calibrationOffset}
           />
         )}
+        
+        {/* Moved calibration overlay outside for better visibility */}
       </Animated.View>
 
       {/* MapLibre GL Map View */}
@@ -751,16 +846,32 @@ const CourseMapView = React.memo(({
           maxZoomLevel={MAP_CONFIG.maxZoom || 20}
         />
 
-        {/* User Location */}
-        {hasLocationPermission && (
+        {/* User Location - Hidden in calibration mode to avoid confusion */}
+        {hasLocationPermission && !calibrationMode && (
           <MapLibreGL.UserLocation
             visible={true}
             onUpdate={onUserLocationUpdate}
             showsUserHeadingIndicator={true}
           />
         )}
+        
+        {/* Custom calibrated user location marker - always show if calibrated */}
+        {hasLocationPermission && userLocation && (calibrationOffset.lat !== 0 || calibrationOffset.lng !== 0) && !calibrationMode && (
+          <MapLibreGL.PointAnnotation
+            id="calibrated-user-location"
+            coordinate={[
+              userLocation.longitude + calibrationOffset.lng,
+              userLocation.latitude + calibrationOffset.lat
+            ]}
+          >
+            <View style={styles.calibratedLocationMarker}>
+              <View style={styles.calibratedLocationDot} />
+              <View style={styles.calibratedLocationRing} />
+            </View>
+          </MapLibreGL.PointAnnotation>
+        )}
 
-        {/* Test Marker at Augusta National */}
+        {/* Test Marker at Augusta National - Disabled for now
         <MapLibreGL.PointAnnotation
           id="augusta-center"
           coordinate={[-82.0206, 33.5031]}
@@ -771,6 +882,7 @@ const CourseMapView = React.memo(({
           </View>
           <MapLibreGL.Callout title="Augusta National Golf Club" />
         </MapLibreGL.PointAnnotation>
+        */}
 
         {/* Current hole marker */}
         {currentHoleData && currentHoleData.greenLatitude && currentHoleData.greenLongitude && (
@@ -790,11 +902,53 @@ const CourseMapView = React.memo(({
         )}
       </MapLibreGL.MapView>
 
-      {/* Gesture capture overlay */}
-      <View
-        style={styles.gestureOverlay}
-        {...panResponder.panHandlers}
-      />
+      {/* Gesture capture overlay - Only active in calibration mode */}
+      {calibrationMode && (
+        <View
+          style={styles.gestureOverlay}
+          {...panResponder.panHandlers}
+        />
+      )}
+      
+      {/* Calibration Mode Overlay - Positioned after gesture overlay */}
+      {calibrationMode && userLocation && mapBounds && (
+        <>
+          {console.log('Rendering calibration crosshairs:', { 
+            calibrationMode, 
+            hasUserLocation: !!userLocation,
+            hasMapBounds: !!mapBounds,
+            userLocation,
+            mapBounds 
+          })}
+          {/* Current GPS Position Crosshair (Red) */}
+          <View style={[
+            styles.calibrationCrosshair,
+            {
+              left: ((userLocation.longitude - mapBounds.west) / (mapBounds.east - mapBounds.west)) * width - 15,
+              top: (1 - (userLocation.latitude - mapBounds.south) / (mapBounds.north - mapBounds.south)) * height - 15,
+            }
+          ]}>
+            <View style={[styles.crosshairLine, styles.crosshairHorizontal, { backgroundColor: '#FF0000' }]} />
+            <View style={[styles.crosshairLine, styles.crosshairVertical, { backgroundColor: '#FF0000' }]} />
+            <Text style={[styles.crosshairLabel, { color: '#FF0000' }]}>GPS</Text>
+          </View>
+          
+          {/* Calibrated Position Crosshair (Green) - if offset exists */}
+          {(calibrationOffset.lat !== 0 || calibrationOffset.lng !== 0) && (
+            <View style={[
+              styles.calibrationCrosshair,
+              {
+                left: ((userLocation.longitude + calibrationOffset.lng - mapBounds.west) / (mapBounds.east - mapBounds.west)) * width - 15,
+                top: (1 - (userLocation.latitude + calibrationOffset.lat - mapBounds.south) / (mapBounds.north - mapBounds.south)) * height - 15,
+              }
+            ]}>
+              <View style={[styles.crosshairLine, styles.crosshairHorizontal, { backgroundColor: '#00FF00' }]} />
+              <View style={[styles.crosshairLine, styles.crosshairVertical, { backgroundColor: '#00FF00' }]} />
+              <Text style={[styles.crosshairLabel, { color: '#00FF00' }]}>Actual</Text>
+            </View>
+          )}
+        </>
+      )}
 
       {/* Hole Navigation Bar */}
       <View style={styles.holeNavigation} pointerEvents="box-none">
@@ -866,6 +1020,9 @@ const CourseMapView = React.memo(({
             <Text style={styles.gpsCoords}>
               {userLocation.latitude ? userLocation.latitude.toFixed(6) : '--'}, {userLocation.longitude ? userLocation.longitude.toFixed(6) : '--'}
             </Text>
+            {calibrationMode && (
+              <Text style={styles.calibrationText}>Calibration: {calibrationOffset.lat.toFixed(6)}, {calibrationOffset.lng.toFixed(6)}</Text>
+            )}
           </>
         ) : (
           <Text style={styles.gpsText}>Acquiring...</Text>
@@ -873,22 +1030,41 @@ const CourseMapView = React.memo(({
       </View>
       
       {/* User location button */}
-      {hasLocationPermission && userLocation && (
+      {hasLocationPermission && userLocation && userLocation.latitude && userLocation.longitude ? (
         <TouchableOpacity
           style={styles.locationButton}
           onPress={() => {
-            if (userLocation?.coords) {
-              flyToLocation(userLocation.coords.longitude, userLocation.coords.latitude, 18);
+            console.log('Location button pressed!');
+            if (userLocation) {
+              // Fly to calibrated location if offset exists, otherwise raw GPS
+              const lng = userLocation.longitude + calibrationOffset.lng;
+              const lat = userLocation.latitude + calibrationOffset.lat;
+              flyToLocation(lng, lat, 18);
+            }
+          }}
+          onLongPress={() => {
+            console.log('Location button long pressed!');
+            // Toggle calibration mode on long press
+            setCalibrationMode(!calibrationMode);
+            if (!calibrationMode) {
+              Alert.alert(
+                'Calibration Mode On',
+                'Tap on the map where you actually are to calibrate GPS offset.\n\nThe red crosshair shows raw GPS position.\nTap your actual location to set the offset.',
+                [{ text: 'OK' }]
+              );
             }
           }}
         >
-          <Text style={styles.locationButtonText}>📍</Text>
+          <Text style={styles.locationButtonText}>{calibrationMode ? '🎯' : '📍'}</Text>
         </TouchableOpacity>
+      ) : (
+        <View style={[styles.locationButton, { backgroundColor: 'red' }]}>
+          <Text style={styles.locationButtonText}>?</Text>
+        </View>
       )}
 
       {/* Shot visibility toggle */}
       {shots.length > 0 && (
-        console.log(`Rendering shot toggle button, shots: ${shots.length}, showShots: ${showShots}`),
         <TouchableOpacity
           style={styles.shotToggleButton}
           onPress={() => {
@@ -980,7 +1156,7 @@ const styles = StyleSheet.create({
   },
   gestureOverlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 2,
+    zIndex: 999,
     backgroundColor: 'transparent',
   },
   markerContainer: {
@@ -1152,6 +1328,65 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: 'monospace',
   },
+  calibrationText: {
+    fontSize: 9,
+    color: '#FF6B6B',
+    marginTop: 2,
+    fontWeight: 'bold',
+  },
+  calibrationCrosshair: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    elevation: 100,
+  },
+  crosshairLine: {
+    position: 'absolute',
+  },
+  crosshairHorizontal: {
+    width: 30,
+    height: 3,  // Thicker line
+    top: 13.5,
+  },
+  crosshairVertical: {
+    width: 3,   // Thicker line
+    height: 30,
+    left: 13.5,
+  },
+  crosshairLabel: {
+    position: 'absolute',
+    top: -20,
+    fontSize: 12,
+    fontWeight: 'bold',
+    backgroundColor: 'white',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  calibratedLocationMarker: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calibratedLocationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CAF50',
+    position: 'absolute',
+  },
+  calibratedLocationRing: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+    position: 'absolute',
+  },
   locationButton: {
     position: 'absolute',
     bottom: 110,
@@ -1159,18 +1394,19 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'white',
+    backgroundColor: '#2196F3',  // Changed to blue for better visibility
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
-    elevation: 5,
-    zIndex: 3,
+    elevation: 10,  // Increased elevation
+    zIndex: 999,    // Increased z-index
   },
   locationButtonText: {
-    fontSize: 20,
+    fontSize: 24,
+    color: 'white',  // Make sure text is visible on blue background
   },
   shotToggleButton: {
     position: 'absolute',
@@ -1179,15 +1415,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'white',
+    backgroundColor: '#FF5722',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
-    elevation: 5,
-    zIndex: 3,
+    elevation: 10,
+    zIndex: 999,
   },
   shotToggleButtonText: {
     fontSize: 20,
