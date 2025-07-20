@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Golf Tracker</string>
+    <string name="record_shot">Record Shot</string>
+    <string name="select_club">Select Club</string>
+    <string name="putts">Putts</string>
+    <string name="stats">Stats</string>
+    <string name="hole_label">Hole %1$d</string>
+    <string name="gps_status">GPS: %1$s</string>
+    <string name="distance_to_pin">To Pin</string>
+    <string name="distance_last_shot">Last Shot</string>
+    <string name="no_data">--</string>
+    <string name="connecting">Connecting...</string>
+    <string name="not_connected">Not Connected</string>
+    <string name="shot_recorded">Shot Recorded</string>
+    <string name="club_selected">Club Selected</string>
+</resources>

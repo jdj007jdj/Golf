@@ -16,6 +16,7 @@ import CourseListScreen from '../screens/courses/CourseListScreen';
 import CourseDetailsScreen from '../screens/courses/CourseDetailsScreen';
 import StartRoundScreen from '../screens/rounds/StartRoundScreen';
 import ScorecardScreen from '../screens/rounds/ScorecardScreen';
+import MapScreen from '../screens/map/MapScreen';
 import RoundSummaryScreen from '../screens/rounds/RoundSummaryScreen';
 import RoundHistoryScreen from '../screens/rounds/RoundHistoryScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
@@ -58,6 +59,10 @@ const MainStack = ({ initialRouteName, initialParams }) => {
         name="Scorecard" 
         component={ScorecardScreen}
         initialParams={initialParams?.Scorecard}
+      />
+      <Stack.Screen 
+        name="Map" 
+        component={MapScreen}
       />
       <Stack.Screen name="RoundSummary" component={RoundSummaryScreen} />
       <Stack.Screen name="RoundHistory" component={RoundHistoryScreen} />

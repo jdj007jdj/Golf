@@ -7,13 +7,18 @@ import {
   SafeAreaView,
 } from 'react-native';
 
-const SharedHeader = ({ navigation, onSettingsPress, title }) => {
+const SharedHeader = ({ navigation, onSettingsPress, title, showMapButton, onMapPress, onBackPress }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => {
+            if (onBackPress) {
+              onBackPress();
+              return;
+            }
+            
             console.log('[SharedHeader] Back button pressed');
             console.log('[SharedHeader] Current route:', navigation.getState()?.routes?.[navigation.getState()?.index]?.name);
             console.log('[SharedHeader] Navigation state:', JSON.stringify(navigation.getState(), null, 2));
@@ -50,12 +55,22 @@ const SharedHeader = ({ navigation, onSettingsPress, title }) => {
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{title}</Text>
-        <TouchableOpacity 
-          style={styles.settingsButton}
-          onPress={onSettingsPress}
-        >
-          <Text style={styles.settingsText}>⚙</Text>
-        </TouchableOpacity>
+        <View style={styles.rightButtons}>
+          {showMapButton && (
+            <TouchableOpacity 
+              style={styles.mapButton}
+              onPress={onMapPress}
+            >
+              <Text style={styles.mapText}>📍</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={styles.settingsButton}
+            onPress={onSettingsPress}
+          >
+            <Text style={styles.settingsText}>⚙</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -64,6 +79,8 @@ const SharedHeader = ({ navigation, onSettingsPress, title }) => {
 const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: '#2e7d32',
+    zIndex: 1000,
+    elevation: 10,
   },
   header: {
     flexDirection: 'row',
@@ -72,6 +89,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2e7d32',
     paddingHorizontal: 20,
     paddingVertical: 15,
+    zIndex: 1000,
   },
   backButton: {
     padding: 5,
@@ -85,6 +103,17 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  rightButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mapButton: {
+    padding: 5,
+    marginRight: 10,
+  },
+  mapText: {
+    fontSize: 20,
   },
   settingsButton: {
     padding: 5,

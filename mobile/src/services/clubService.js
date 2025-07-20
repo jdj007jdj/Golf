@@ -185,6 +185,16 @@ class ClubService {
   }
 
   /**
+   * Get a club by name
+   */
+  getClubByName(name) {
+    return this.bag.clubs.find(club => 
+      club.name.toLowerCase() === name.toLowerCase() ||
+      club.clubType.toLowerCase() === name.toLowerCase()
+    );
+  }
+
+  /**
    * Update club performance after a shot
    */
   async updateClubPerformance(clubId, distance) {

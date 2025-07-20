@@ -38,5 +38,15 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+      
+      <!-- Wearable Listener Service for receiving messages from watch -->
+      <service
+        android:name=".wearable.WearableListenerService"
+        android:exported="true">
+        <intent-filter>
+          <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+          <data android:scheme="wear" android:host="*" />
+        </intent-filter>
+      </service>
     </application>
 </manifest>

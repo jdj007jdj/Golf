@@ -16,6 +16,7 @@ import SmartClubSelector from '../../../components/SmartClubSelector';
 import clubService from '../../../services/clubService';
 import gamePersistenceService from '../../../services/gamePersistenceService';
 import { detectAchievements } from '../../../utils/coursePerformanceUtils';
+import { wearableService } from '../../../services/wearableService';
 
 const { width } = Dimensions.get('window');
 
@@ -57,6 +58,8 @@ const ScorecardView = ({
   const [showClubReminders, setShowClubReminders] = useState(settings?.scorecard?.showClubReminders ?? true);
   const [clubTrackingDisabledForRound, setClubTrackingDisabledForRound] = useState(false);
   const [animationTimeouts, setAnimationTimeouts] = useState([]);
+  const [currentDistances, setCurrentDistances] = useState(null);
+  const [lastShotDistance, setLastShotDistance] = useState(null);
   
   // Get GPS tracking setting from settings context
   const isShotTrackingEnabled = settings?.shotTracking?.enabled ?? true;
@@ -76,7 +79,7 @@ const ScorecardView = ({
     };
   }, [animationTimeouts]);
 
-  // Initialize shot tracking service and club service
+  // Initialize shot tracking service, club service, and wearable service
   useEffect(() => {
     const initializeServices = async () => {
       if (round?.id) {
@@ -84,6 +87,18 @@ const ScorecardView = ({
           await shotTrackingService.initialize(round.id, course?.id);
           await clubService.initialize();
           console.log('Shot tracking and club services initialized for round:', round.id);
+          
+          // Initialize wearable service
+          wearableService.initialize();
+          
+          // Start round on watch
+          await wearableService.startRound({
+            roundId: round.id,
+            courseName: course?.name || 'Unknown Course',
+            currentHole: currentHole,
+            totalHoles: holes.length
+          });
+          
         } catch (error) {
           console.error('Error initializing services:', error);
         }
@@ -91,7 +106,154 @@ const ScorecardView = ({
     };
 
     initializeServices();
+    
+    // Cleanup on unmount
+    return () => {
+      if (round?.id) {
+        wearableService.endRound().catch(console.error);
+      }
+    };
   }, [round?.id, course?.id]);
+
+  // Listen for watch events
+  useEffect(() => {
+    const unsubscribeShot = wearableService.onShotRecorded(async (shotData) => {
+      console.log('Shot received from watch:', shotData);
+      
+      // Increment score for the hole
+      const currentScore = scores[shotData.holeNumber] || 0;
+      const newScore = currentScore + 1;
+      
+      // Update score
+      setScores(prev => ({
+        ...prev,
+        [shotData.holeNumber]: newScore
+      }));
+      
+      // Log the shot with GPS data
+      if (isShotTrackingEnabled) {
+        try {
+          await shotTrackingService.logShot(
+            shotData.holeNumber,
+            newScore,
+            newScore,
+            null // No club yet
+          );
+          
+          // TODO: Update shotTrackingService to accept location data from watch
+        } catch (error) {
+          console.error('Failed to log shot from watch:', error);
+        }
+      }
+      
+      // Animate the score
+      Animated.sequence([
+        Animated.timing(scoreAnimation, {
+          toValue: 1.2,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scoreAnimation, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+
+    const unsubscribeClub = wearableService.onClubSelected((clubData) => {
+      console.log('Club selected from watch:', clubData);
+      
+      // Find the latest shot for current hole
+      const currentScore = scores[currentHole] || 0;
+      if (currentScore > 0) {
+        // Update club for the latest shot
+        const clubFromName = clubService.getClubByName(clubData.club);
+        if (clubFromName) {
+          setClubs(prev => ({
+            ...prev,
+            [`${currentHole}-${currentScore}`]: clubFromName.id
+          }));
+          setSelectedClub(clubFromName);
+        }
+      }
+    });
+
+    const unsubscribePutt = wearableService.onPuttUpdated((puttData) => {
+      console.log('Putt updated from watch:', puttData);
+      
+      // Update putts for the hole
+      setPutts(prev => ({
+        ...prev,
+        [puttData.holeNumber]: puttData.putts
+      }));
+    });
+
+    const unsubscribeConnection = wearableService.onConnectionStatusChanged((status) => {
+      console.log('Watch connection status:', status);
+    });
+
+    // Cleanup
+    return () => {
+      unsubscribeShot();
+      unsubscribeClub();
+      unsubscribePutt();
+      unsubscribeConnection();
+    };
+  }, [scores, currentHole, isShotTrackingEnabled, scoreAnimation]);
+
+  // Update distances periodically
+  useEffect(() => {
+    if (!isShotTrackingEnabled) return;
+
+    const updateDistances = async () => {
+      try {
+        // Get current distances
+        const distances = await shotTrackingService.getCurrentDistances(currentHole);
+        setCurrentDistances(distances);
+
+        // Get last shot distance
+        const currentShot = scores[currentHole] || 0;
+        let lastShot = null;
+        if (currentShot > 0) {
+          const previousShot = shotTrackingService.getPreviousShot(currentHole, currentShot);
+          if (previousShot && previousShot.distanceToNext) {
+            lastShot = Math.round(previousShot.distanceToNext);
+            setLastShotDistance(lastShot);
+          } else {
+            setLastShotDistance(null);
+          }
+        } else {
+          setLastShotDistance(null);
+        }
+        
+        // Send stats to watch
+        if (distances?.pin || lastShot) {
+          await wearableService.sendStats({
+            distanceToPin: distances?.pin?.distance ? Math.round(distances.pin.distance) : 0,
+            distanceLastShot: lastShot || 0,
+            measurementUnit: settings?.measurementSystem || 'imperial',
+            currentHole: currentHole
+          });
+        }
+      } catch (error) {
+        console.error('Error updating distances:', error);
+      }
+    };
+
+    // Update immediately and then every 5 seconds
+    updateDistances();
+    const interval = setInterval(updateDistances, 5000);
+
+    return () => clearInterval(interval);
+  }, [currentHole, isShotTrackingEnabled, scores, settings?.measurementSystem]);
+
+  // Update watch when hole changes
+  useEffect(() => {
+    if (currentHole) {
+      wearableService.updateHole(currentHole).catch(console.error);
+    }
+  }, [currentHole]);
 
   // Update selected club when hole changes
   useEffect(() => {
@@ -599,6 +761,37 @@ const ScorecardView = ({
             </View>
           </View>
 
+          {/* Stats Card */}
+          {isShotTrackingEnabled && (currentDistances?.pin || lastShotDistance) && (
+            <View style={styles.statsCard}>
+              <Text style={styles.statsTitle}>Stats</Text>
+              <View style={styles.statsContent}>
+                {currentDistances?.pin && (
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>Distance to Pin</Text>
+                    <Text style={styles.statValue}>
+                      {settings?.measurementSystem === 'metric' 
+                        ? `${Math.round(currentDistances.pin.distance || currentDistances.pin)}m`
+                        : `${Math.round((currentDistances.pin.distance || currentDistances.pin) * 1.09361)}y`
+                      }
+                    </Text>
+                  </View>
+                )}
+                {lastShotDistance && (
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>Distance Last Shot</Text>
+                    <Text style={styles.statValue}>
+                      {settings?.measurementSystem === 'metric'
+                        ? `${Math.round(lastShotDistance * 0.9144)}m`
+                        : `${lastShotDistance}y`
+                      }
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
           {/* Historical Data Display */}
           {currentHoleHistorical && (
             <View style={styles.historicalSection}>
@@ -1002,6 +1195,41 @@ const styles = StyleSheet.create({
   clubButtonArrow: {
     fontSize: 20,
     marginLeft: 12,
+  },
+  statsCard: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+  },
+  statsContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2e7d32',
   },
   historicalSection: {
     backgroundColor: 'white',

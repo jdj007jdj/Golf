@@ -240,8 +240,8 @@ const SettingsScreen = ({ navigation }) => {
           storageLimit: cacheLimit * 1024 * 1024, // Convert MB to bytes
         });
         
-        // Update user profile if changed
-        if (token && (firstName !== user?.firstName || lastName !== user?.lastName || handicap)) {
+        // Update user profile if changed (only for online accounts)
+        if (!isLocalAccount && token && (firstName !== user?.firstName || lastName !== user?.lastName || handicap)) {
           try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);

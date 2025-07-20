@@ -489,60 +489,63 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
         {players.map(renderPlayerScoreRow)}
       </ScrollView>
 
-      {/* Game Status Button */}
-      <TouchableOpacity 
-        style={styles.gameStatusButton}
-        onPress={() => setShowGameStatusModal(true)}
-      >
-        <Text style={styles.gameStatusButtonText}>View Full Game Status</Text>
-      </TouchableOpacity>
+      {/* Bottom Container for Button and Hole Navigation */}
+      <View style={styles.bottomContainer}>
+        {/* Game Status Button */}
+        <TouchableOpacity 
+          style={styles.gameStatusButton}
+          onPress={() => setShowGameStatusModal(true)}
+        >
+          <Text style={styles.gameStatusButtonText}>View Full Game Status</Text>
+        </TouchableOpacity>
 
-      {/* Hole Navigation Dots */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.holeDotsContainer}
-        contentContainerStyle={styles.holeDotsContent}
-      >
-        {holes.map((hole) => {
-          const isCarried = gameConfig?.format === 'skins' && 
-                           gameResults?.carriedHoles?.includes(hole.holeNumber);
-          
-          let holeWinnerIndicator = null;
-          if ((gameConfig?.format === 'nassau' || gameConfig?.format === 'match') && gameResults?.holeResults) {
-            const winner = gameResults.holeResults[hole.holeNumber];
-            if (winner && winner !== 'halved') {
-              const winnerPlayer = players.find(p => p.id === winner);
-              holeWinnerIndicator = winnerPlayer?.isUser ? '●' : '○';
+        {/* Hole Navigation Dots */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.holeDotsContainer}
+          contentContainerStyle={styles.holeDotsContent}
+        >
+          {holes.map((hole) => {
+            const isCarried = gameConfig?.format === 'skins' && 
+                             gameResults?.carriedHoles?.includes(hole.holeNumber);
+            
+            let holeWinnerIndicator = null;
+            if ((gameConfig?.format === 'nassau' || gameConfig?.format === 'match') && gameResults?.holeResults) {
+              const winner = gameResults.holeResults[hole.holeNumber];
+              if (winner && winner !== 'halved') {
+                const winnerPlayer = players.find(p => p.id === winner);
+                holeWinnerIndicator = winnerPlayer?.isUser ? '●' : '○';
+              }
             }
-          }
-          
-          return (
-            <TouchableOpacity
-              key={hole.holeNumber}
-              style={[
-                styles.holeDot,
-                currentHole === hole.holeNumber && styles.holeDotActive,
-                isCarried && styles.holeDotCarried
-              ]}
-              onPress={() => setCurrentHole(hole.holeNumber)}
-            >
-              <Text style={[
-                styles.holeDotText,
-                currentHole === hole.holeNumber && styles.holeDotTextActive
-              ]}>
-                {hole.holeNumber}
-              </Text>
-              {isCarried && (
-                <View style={styles.carriedIndicator} />
-              )}
-              {holeWinnerIndicator && (
-                <Text style={styles.holeWinnerIndicator}>{holeWinnerIndicator}</Text>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+            
+            return (
+              <TouchableOpacity
+                key={hole.holeNumber}
+                style={[
+                  styles.holeDot,
+                  currentHole === hole.holeNumber && styles.holeDotActive,
+                  isCarried && styles.holeDotCarried
+                ]}
+                onPress={() => setCurrentHole(hole.holeNumber)}
+              >
+                <Text style={[
+                  styles.holeDotText,
+                  currentHole === hole.holeNumber && styles.holeDotTextActive
+                ]}>
+                  {hole.holeNumber}
+                </Text>
+                {isCarried && (
+                  <View style={styles.carriedIndicator} />
+                )}
+                {holeWinnerIndicator && (
+                  <Text style={styles.holeWinnerIndicator}>{holeWinnerIndicator}</Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* Nassau Status Modal */}
       {gameConfig?.format === 'nassau' && (
@@ -674,6 +677,7 @@ const styles = StyleSheet.create({
   },
   playersContainer: {
     flex: 1,
+    paddingBottom: 150, // Space for bottom container
   },
   playerRow: {
     flexDirection: 'row',
@@ -793,10 +797,25 @@ const styles = StyleSheet.create({
     color: '#4caf50',
     fontWeight: '600',
   },
+  bottomContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
   gameStatusButton: {
     backgroundColor: '#2e7d32',
     marginHorizontal: 16,
-    marginVertical: 12,
+    marginTop: 12,
+    marginBottom: 8,
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
@@ -807,9 +826,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   holeDotsContainer: {
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    backgroundColor: 'transparent',
   },
   holeDotsContent: {
     flexDirection: 'row',

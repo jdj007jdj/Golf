@@ -24,7 +24,6 @@ import {
 } from '../../../utils/coursePerformanceUtils';
 import AchievementPopup from '../../../components/AchievementPopup';
 import ScorecardView from './ScorecardView';
-import CourseMapView from './MapViewWithGestures';
 import FriendsView from './FriendsView';
 import SharedHeader from './SharedHeader';
 import { ScorecardProvider, useScorecardContext } from '../contexts/ScorecardContext';
@@ -33,30 +32,6 @@ const { width } = Dimensions.get('window');
 const Tab = createMaterialTopTabNavigator();
 
 // Create stable component references for tabs
-const MapTab = React.memo(() => {
-  const { 
-    round, 
-    course, 
-    holes, 
-    currentHole, 
-    setCurrentHole, 
-    scores, 
-    settings 
-  } = useScorecardContext();
-  
-  return (
-    <CourseMapView
-      round={round}
-      course={course}
-      holes={holes}
-      currentHole={currentHole}
-      setCurrentHole={setCurrentHole}
-      scores={scores}
-      settings={settings}
-    />
-  );
-});
-
 const ScorecardTab = React.memo(() => {
   const contextValue = useScorecardContext();
   return <ScorecardView {...contextValue} />;
@@ -268,6 +243,11 @@ const ScorecardContainer = ({ route, navigation }) => {
     navigation.navigate('Settings');
   };
 
+  // Handle map navigation
+  const handleMapPress = () => {
+    navigation.navigate('Map', { round, course });
+  };
+
   // Shared props for both tabs - memoized to prevent unnecessary re-renders
   const sharedProps = useMemo(() => ({
     round,
@@ -347,6 +327,8 @@ const ScorecardContainer = ({ route, navigation }) => {
         <SharedHeader
           navigation={navigation}
           onSettingsPress={handleSettings}
+          onMapPress={handleMapPress}
+          showMapButton={true}
           title="Scorecard"
         />
         
@@ -375,11 +357,6 @@ const ScorecardContainer = ({ route, navigation }) => {
           <Tab.Screen 
             name="Score"
             component={ScorecardTab}
-            options={{ lazy: true }}
-          />
-          <Tab.Screen 
-            name="Map"
-            component={MapTab}
             options={{ lazy: true }}
           />
         </Tab.Navigator>
