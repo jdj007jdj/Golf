@@ -253,7 +253,7 @@ export const AuthProvider = ({ children }) => {
     
     try {
       // Get local data for conversion
-      const localData = await localAuthService.getLocalDataForConversion(user.username);
+      const localData = await localAuthService.getLocalDataForConversion(user.email);
       if (!localData) {
         return { success: false, error: 'Failed to get local data' };
       }

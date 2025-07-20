@@ -67,7 +67,7 @@ const FriendsTab = React.memo(() => {
 
 const ScorecardContainer = ({ route, navigation }) => {
   const { round, course } = route.params;
-  const { token } = useAuth();
+  const { token, isLocalAccount } = useAuth();
   const { settings, updateSettings } = useSettings();
   
   // All shared state that both Scorecard and Map need
@@ -236,6 +236,7 @@ const ScorecardContainer = ({ route, navigation }) => {
     // CLUB_OPTIONS removed - using clubService now
     navigation,
     token,
+    isLocalAccount,
     settings,
     updateSettings,
   }), [
@@ -257,6 +258,7 @@ const ScorecardContainer = ({ route, navigation }) => {
     expandedCategories,
     navigation,
     token,
+    isLocalAccount,
     settings
   ]);
 

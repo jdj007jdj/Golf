@@ -29,6 +29,7 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
     setPutts,
     round,
     token,
+    isLocalAccount,
   } = useScorecardContext();
   
   const [playerScores, setPlayerScores] = useState({});
@@ -175,9 +176,9 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
     }
   };
 
-  // Set up periodic sync to backend
+  // Set up periodic sync to backend (only for online accounts)
   useEffect(() => {
-    if (!round?.id || !token) return;
+    if (!round?.id || !token || isLocalAccount) return;
 
     // Sync immediately when component mounts
     const syncNow = async () => {
@@ -194,7 +195,7 @@ const GameScoringView = ({ players, gameConfig, onUpdateScore }) => {
     }, 30000);
 
     return () => clearInterval(syncInterval);
-  }, [round, token]);
+  }, [round, token, isLocalAccount]);
 
   const adjustScore = (playerId, delta) => {
     const currentScore = playerScores[playerId]?.[currentHole] || currentHoleData.par;

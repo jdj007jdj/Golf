@@ -154,6 +154,11 @@ class GamePersistenceService {
    */
   async createGameOnBackend(token, roundId, gameConfig, participants) {
     try {
+      // Skip backend sync for local rounds
+      if (roundId && roundId.startsWith('local_')) {
+        console.log('Skipping backend sync for local round:', roundId);
+        return null;
+      }
       const requestBody = {
         roundId,
         gameType: gameConfig.format,
@@ -232,6 +237,11 @@ class GamePersistenceService {
    */
   async syncGameToBackend(token, roundId) {
     try {
+      // Skip sync for local rounds
+      if (roundId && roundId.startsWith('local_')) {
+        console.log('Skipping backend sync for local round:', roundId);
+        return true; // Return true to prevent it from being re-queued
+      }
       const gameData = await this.loadGameData(roundId);
       if (!gameData) {
         console.log('No game data to sync');
@@ -341,6 +351,13 @@ class GamePersistenceService {
       
       for (const roundId of queue) {
         try {
+          // Skip local rounds
+          if (roundId && roundId.startsWith('local_')) {
+            console.log('Removing local round from sync queue:', roundId);
+            processedRounds.push(roundId); // Mark as processed to remove from queue
+            continue;
+          }
+          
           const success = await this.syncGameToBackend(token, roundId);
           if (success) {
             processedRounds.push(roundId);
@@ -367,6 +384,11 @@ class GamePersistenceService {
    */
   async syncGameToBackendWithQueue(token, roundId) {
     try {
+      // Skip sync for local rounds
+      if (roundId && roundId.startsWith('local_')) {
+        console.log('Skipping backend sync for local round:', roundId);
+        return true;
+      }
       // First, try to process any queued items
       await this.processSyncQueue(token);
       

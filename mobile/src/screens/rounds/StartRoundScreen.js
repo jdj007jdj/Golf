@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const StartRoundScreen = ({ route, navigation }) => {
   const { course } = route.params || {};
-  const { token } = useAuth();
+  const { token, isLocalAccount, user } = useAuth();
   
   const [roundType, setRoundType] = useState('practice');
   const [selectedTeeBox, setSelectedTeeBox] = useState(null);
@@ -46,56 +46,90 @@ const StartRoundScreen = ({ route, navigation }) => {
 
     setLoading(true);
     try {
-      const roundData = {
-        courseId: course.id,
-        teeBoxId: selectedTeeBox,
-        roundType,
-        startTime: new Date().toISOString(),
-      };
-
-      // Create AbortController for request timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
-
-      const response = await fetch(API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.ROUNDS, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(roundData),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        // Save active round data for resumption
-        const activeRoundData = {
-          round: data.data,
-          course: course,
-          startedAt: new Date().toISOString()
+      let roundData;
+      
+      if (isLocalAccount) {
+        // For local accounts, create round locally
+        roundData = {
+          id: `local_round_${Date.now()}`,
+          courseId: course.id,
+          teeBoxId: selectedTeeBox,
+          roundType,
+          startTime: new Date().toISOString(),
+          userId: user?.id,
+          isLocal: true,
+          scores: {}, // Will be filled as the round progresses
+          participants: [{
+            id: `local_participant_${Date.now()}`,
+            userId: user?.id,
+            userName: user?.username || user?.email,
+            teeBoxId: selectedTeeBox,
+          }]
         };
         
-        try {
-          await AsyncStorage.setItem('golf_active_round', JSON.stringify(activeRoundData));
-        } catch (error) {
-          console.error('Error saving active round:', error);
+        // Save to local storage
+        const roundsKey = `local_rounds_${user?.id}`;
+        const existingRounds = await AsyncStorage.getItem(roundsKey);
+        const rounds = existingRounds ? JSON.parse(existingRounds) : [];
+        rounds.push(roundData);
+        await AsyncStorage.setItem(roundsKey, JSON.stringify(rounds));
+      } else {
+        // For online accounts, create round via API
+        const requestData = {
+          courseId: course.id,
+          teeBoxId: selectedTeeBox,
+          roundType,
+          startTime: new Date().toISOString(),
+        };
+
+        // Create AbortController for request timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
+        const response = await fetch(API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.ROUNDS, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestData),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          Alert.alert(
+            'Error',
+            data.error?.message || data.message || 'Failed to start round. Please try again.'
+          );
+          setLoading(false);
+          return;
         }
         
-        // Navigate to scorecard with the new round data
-        navigation.navigate('Scorecard', { 
-          round: data.data,
-          course: course 
-        });
-      } else {
-        Alert.alert(
-          'Error',
-          data.error?.message || data.message || 'Failed to start round. Please try again.'
-        );
+        roundData = data.data;
       }
+
+      // Save active round data for resumption
+      const activeRoundData = {
+        round: roundData,
+        course: course,
+        startedAt: new Date().toISOString()
+      };
+      
+      try {
+        await AsyncStorage.setItem('golf_active_round', JSON.stringify(activeRoundData));
+      } catch (error) {
+        console.error('Error saving active round:', error);
+      }
+      
+      // Navigate to scorecard with the new round data
+      navigation.navigate('Scorecard', { 
+        round: roundData,
+        course: course 
+      });
     } catch (error) {
       console.error('CATCH: Error starting round:', error);
       if (error.name === 'AbortError') {

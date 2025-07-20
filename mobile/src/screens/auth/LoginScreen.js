@@ -22,26 +22,20 @@ const LoginScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState('online'); // 'online' or 'local'
   const [isCreatingLocal, setIsCreatingLocal] = useState(false);
+  
+  // Reset isCreatingLocal when mode changes
+  React.useEffect(() => {
+    setIsCreatingLocal(false);
+  }, [mode]);
 
   const validateForm = () => {
     const newErrors = {};
     
-    if (mode === 'online') {
-      // Email validation for online
-      if (!email.trim()) {
-        newErrors.email = 'Email is required';
-      } else if (!/\S+@\S+\.\S+/.test(email)) {
-        newErrors.email = 'Email is invalid';
-      }
-    } else {
-      // Username validation for local
-      if (!username.trim()) {
-        newErrors.username = 'Username is required';
-      } else if (username.length < 3) {
-        newErrors.username = 'Username must be at least 3 characters';
-      } else if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        newErrors.username = 'Username can only contain letters, numbers, and underscores';
-      }
+    // Email validation for both online and local
+    if (!email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      newErrors.email = 'Email is invalid';
     }
     
     // Password validation
@@ -55,40 +49,52 @@ const LoginScreen = ({ navigation }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (forceCreateLocal = false) => {
     if (!validateForm()) {
       return;
     }
 
     setLoading(true);
     
+    console.log('🔐 handleLogin called with:', { mode, isCreatingLocal, forceCreateLocal });
+    
     let result;
     if (mode === 'online') {
       result = await login(email, password);
     } else {
-      if (isCreatingLocal) {
-        result = await createLocalAccount(username, password);
+      if (forceCreateLocal || isCreatingLocal) {
+        console.log('📝 Attempting to create local account');
+        result = await createLocalAccount(email, password);
       } else {
-        result = await loginLocal(username, password);
+        console.log('🔓 Attempting to login to local account');
+        result = await loginLocal(email, password);
       }
     }
     
     if (!result.success) {
-      if (mode === 'local' && !isCreatingLocal && result.error.includes('Invalid')) {
-        // If login failed, offer to create account
+      if (mode === 'local' && !forceCreateLocal && !isCreatingLocal && result.error.includes('Invalid email or password')) {
+        // Check if this is truly a non-existent account or just wrong password
+        // For now, we'll keep the existing behavior but with clearer messaging
         Alert.alert(
-          'Account Not Found',
-          'No local account found with this username. Would you like to create one?',
+          'Login Failed',
+          'Invalid email or password. If you don\'t have a local account yet, you can create one.',
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: 'Try Again', style: 'cancel' },
             { 
-              text: 'Create Account', 
+              text: 'Create New Account', 
               onPress: () => {
                 setIsCreatingLocal(true);
-                handleLogin();
+                handleLogin(true); // Pass true to force create local account
               }
             }
           ]
+        );
+      } else if (result.error.includes('already exists')) {
+        // This means they're trying to create an account that already exists
+        Alert.alert(
+          'Account Exists', 
+          'A local account with this email already exists. Please login with your password.',
+          [{ text: 'OK', onPress: () => setIsCreatingLocal(false) }]
         );
       } else {
         Alert.alert(isCreatingLocal ? 'Account Creation Failed' : 'Login Failed', result.error);
@@ -97,6 +103,8 @@ const LoginScreen = ({ navigation }) => {
     // If successful, navigation will happen automatically via AuthContext
     
     setLoading(false);
+    // Always reset isCreatingLocal after handling the result
+    // The alert handlers will set it again if needed
     setIsCreatingLocal(false);
   };
 
@@ -130,6 +138,7 @@ const LoginScreen = ({ navigation }) => {
             onPress={() => {
               setMode('local');
               setErrors({});
+              setIsCreatingLocal(false); // Ensure we start in login mode
             }}
           >
             <Text style={[styles.modeButtonText, mode === 'local' && styles.modeButtonTextActive]}>
@@ -139,36 +148,20 @@ const LoginScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.form}>
-          {mode === 'online' ? (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={[styles.input, errors.email && styles.inputError]}
-                placeholder="Enter your email"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                editable={!loading}
-              />
-              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-            </View>
-          ) : (
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Username</Text>
-              <TextInput
-                style={[styles.input, errors.username && styles.inputError]}
-                placeholder="Choose a username"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                autoComplete="username"
-                editable={!loading}
-              />
-              {errors.username && <Text style={styles.errorText}>{errors.username}</Text>}
-            </View>
-          )}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={[styles.input, errors.email && styles.inputError]}
+              placeholder="Enter your email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              editable={!loading}
+            />
+            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+          </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
@@ -194,7 +187,7 @@ const LoginScreen = ({ navigation }) => {
 
           <TouchableOpacity 
             style={[styles.button, loading && styles.buttonDisabled]} 
-            onPress={handleLogin}
+            onPress={() => handleLogin()}
             disabled={loading}
           >
             {loading ? (

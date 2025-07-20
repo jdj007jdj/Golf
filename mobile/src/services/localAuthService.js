@@ -38,34 +38,37 @@ class LocalAuthService {
   }
 
   // Generate a local token
-  generateLocalToken(username) {
+  generateLocalToken(email) {
     const timestamp = Date.now();
-    const data = `${username}-${this.deviceId}-${timestamp}`;
+    const data = `${email}-${this.deviceId}-${timestamp}`;
     return CryptoJS.SHA256(data).toString();
   }
 
   // Create a new local user
-  async createLocalUser(username, password) {
+  async createLocalUser(email, password) {
     try {
-      console.log('📝 Creating local user:', username);
+      console.log('📝 Creating local user:', email);
       
       // Check if user already exists
-      const existingUser = await this.getLocalUser(username);
+      const existingUser = await this.getLocalUser(email);
       if (existingUser) {
         return {
           success: false,
-          error: 'Username already exists on this device'
+          error: 'An account with this email already exists on this device'
         };
       }
 
       // Generate user ID
       const userId = `local_${this.deviceId}_${Date.now()}`;
       
+      // Generate username from email
+      const username = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_');
+      
       // Create user data
       const userData = {
         id: userId,
-        username,
-        email: `${username}@local.device`, // Placeholder email
+        username: username,
+        email: email,
         passwordHash: this.hashPassword(password),
         accountType: 'local',
         deviceId: this.deviceId,
@@ -80,14 +83,14 @@ class LocalAuthService {
         }
       };
 
-      // Store user data
-      const userKey = `${this.storagePrefix}user_${username}`;
+      // Store user data using email as key
+      const userKey = `${this.storagePrefix}user_${email}`;
       await AsyncStorage.setItem(userKey, JSON.stringify(userData));
 
-      // Store username in local users list
+      // Store email in local users list
       const usersListKey = `${this.storagePrefix}users_list`;
       const usersList = await this.getLocalUsersList();
-      usersList.push(username);
+      usersList.push(email);
       await AsyncStorage.setItem(usersListKey, JSON.stringify(usersList));
 
       console.log('✅ Local user created successfully');
@@ -110,38 +113,48 @@ class LocalAuthService {
   }
 
   // Authenticate local user
-  async authenticateLocal(username, password) {
+  async authenticateLocal(email, password) {
     try {
-      console.log('🔓 Authenticating local user:', username);
+      console.log('🔓 Authenticating local user:', email);
       
-      const userData = await this.getLocalUser(username);
+      const userData = await this.getLocalUser(email);
+      console.log('📊 User data found:', userData ? 'Yes' : 'No');
+      
       if (!userData) {
+        console.log('❌ No user found with email:', email);
         return {
           success: false,
-          error: 'Invalid username or password'
+          error: 'Invalid email or password'
         };
       }
 
       // Verify password
       const passwordHash = this.hashPassword(password);
+      console.log('🔑 Password hash comparison:', {
+        provided: passwordHash.substring(0, 10) + '...',
+        stored: userData.passwordHash?.substring(0, 10) + '...',
+        match: passwordHash === userData.passwordHash
+      });
+      
       if (passwordHash !== userData.passwordHash) {
+        console.log('❌ Password mismatch');
         return {
           success: false,
-          error: 'Invalid username or password'
+          error: 'Invalid email or password'
         };
       }
 
       // Generate local token
-      const token = this.generateLocalToken(username);
+      const token = this.generateLocalToken(email);
 
       // Update last login
       userData.lastLogin = new Date().toISOString();
-      const userKey = `${this.storagePrefix}user_${username}`;
+      const userKey = `${this.storagePrefix}user_${email}`;
       await AsyncStorage.setItem(userKey, JSON.stringify(userData));
 
       // Store current auth
       await AsyncStorage.setItem(`${this.storagePrefix}auth_token`, token);
-      await AsyncStorage.setItem(`${this.storagePrefix}current_user`, username);
+      await AsyncStorage.setItem(`${this.storagePrefix}current_user`, email);
       
       console.log('✅ Local authentication successful');
       return {
@@ -165,9 +178,9 @@ class LocalAuthService {
   }
 
   // Get local user data
-  async getLocalUser(username) {
+  async getLocalUser(email) {
     try {
-      const userKey = `${this.storagePrefix}user_${username}`;
+      const userKey = `${this.storagePrefix}user_${email}`;
       const userData = await AsyncStorage.getItem(userKey);
       return userData ? JSON.parse(userData) : null;
     } catch (error) {
@@ -203,10 +216,10 @@ class LocalAuthService {
   // Get current local user ID
   async getLocalUserId() {
     try {
-      const username = await AsyncStorage.getItem(`${this.storagePrefix}current_user`);
-      if (!username) return null;
+      const email = await AsyncStorage.getItem(`${this.storagePrefix}current_user`);
+      if (!email) return null;
       
-      const userData = await this.getLocalUser(username);
+      const userData = await this.getLocalUser(email);
       return userData?.id || null;
     } catch (error) {
       console.error('Error getting local user ID:', error);
@@ -215,9 +228,9 @@ class LocalAuthService {
   }
 
   // Update user stats
-  async updateUserStats(username, stats) {
+  async updateUserStats(email, stats) {
     try {
-      const userData = await this.getLocalUser(username);
+      const userData = await this.getLocalUser(email);
       if (!userData) return false;
 
       userData.stats = {
@@ -225,7 +238,7 @@ class LocalAuthService {
         ...stats
       };
 
-      const userKey = `${this.storagePrefix}user_${username}`;
+      const userKey = `${this.storagePrefix}user_${email}`;
       await AsyncStorage.setItem(userKey, JSON.stringify(userData));
       
       return true;
@@ -249,9 +262,9 @@ class LocalAuthService {
   }
 
   // Get all local data for conversion
-  async getLocalDataForConversion(username) {
+  async getLocalDataForConversion(email) {
     try {
-      const userData = await this.getLocalUser(username);
+      const userData = await this.getLocalUser(email);
       if (!userData) return null;
 
       const userId = userData.id;
@@ -279,15 +292,15 @@ class LocalAuthService {
   }
 
   // Clear local data after successful conversion
-  async clearLocalDataAfterConversion(username) {
+  async clearLocalDataAfterConversion(email) {
     try {
-      const userData = await this.getLocalUser(username);
+      const userData = await this.getLocalUser(email);
       if (!userData) return false;
 
       const userId = userData.id;
       
       // Remove all local data
-      await AsyncStorage.removeItem(`${this.storagePrefix}user_${username}`);
+      await AsyncStorage.removeItem(`${this.storagePrefix}user_${email}`);
       await AsyncStorage.removeItem(`${this.storagePrefix}rounds_${userId}`);
       await AsyncStorage.removeItem(`${this.storagePrefix}shots_${userId}`);
       await AsyncStorage.removeItem(`${this.storagePrefix}games_${userId}`);
@@ -296,7 +309,7 @@ class LocalAuthService {
       
       // Remove from users list
       const usersList = await this.getLocalUsersList();
-      const updatedList = usersList.filter(u => u !== username);
+      const updatedList = usersList.filter(u => u !== email);
       await AsyncStorage.setItem(`${this.storagePrefix}users_list`, JSON.stringify(updatedList));
       
       console.log('✅ Local data cleared after conversion');

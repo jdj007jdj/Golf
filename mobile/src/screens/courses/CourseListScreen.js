@@ -12,7 +12,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { API_CONFIG } from '../../config/api';
 
 const CourseListScreen = ({ navigation }) => {
-  const { token } = useAuth();
+  const { token, isLocalAccount } = useAuth();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,18 +25,46 @@ const CourseListScreen = ({ navigation }) => {
   const fetchCourses = async () => {
     try {
       setError(null);
-      const response = await fetch(API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.COURSES, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setCourses(data.data || []);
+      
+      if (isLocalAccount) {
+        // For local accounts, provide a default set of courses
+        const defaultCourses = [
+          {
+            id: 'local-course-1',
+            name: 'Local Golf Course',
+            city: 'Your City',
+            state: 'Your State',
+            country: 'Your Country',
+            holes: Array.from({ length: 18 }, (_, i) => ({
+              id: `hole-${i + 1}`,
+              holeNumber: i + 1,
+              par: i % 3 === 0 ? 5 : (i % 3 === 1 ? 3 : 4), // Mix of par 3, 4, and 5
+              handicapIndex: i + 1,
+            })),
+            teeBoxes: [
+              { id: 'white', name: 'White', color: '#FFFFFF' },
+              { id: 'blue', name: 'Blue', color: '#0066CC' },
+              { id: 'red', name: 'Red', color: '#CC0000' },
+            ],
+            _count: { rounds: 0 }
+          }
+        ];
+        setCourses(defaultCourses);
       } else {
-        setError(data.error?.message || 'Failed to load courses');
+        // For online accounts, fetch from API
+        const response = await fetch(API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.COURSES, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setCourses(data.data || []);
+        } else {
+          setError(data.error?.message || 'Failed to load courses');
+        }
       }
     } catch (err) {
       setError('Network error. Please check your connection.');
