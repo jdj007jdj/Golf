@@ -10,24 +10,34 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="com.google.android.permission.PROVIDE_BACKGROUND" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     
-    <!-- Required for communication with phone app -->
+    <!-- Required for Wearable communication -->
     <uses-permission android:name="com.google.android.wearable.permission.RECEIVE_COMPLICATION_DATA" />
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
 
     <application
+        android:name=".wear.WearApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.DeviceDefault">
+        android:theme="@style/AppTheme">
         
         <uses-library
             android:name="com.google.android.wearable"
             android:required="true" />
 
-        <!-- Main Activity -->
+        <!-- Simple Test Activity -->
         <activity
-            android:name=".MainActivity"
+            android:name=".wear.SimpleTestActivity"
+            android:exported="true"
+            android:label="Golf Test" />
+        
+        <!-- Main Activity (Launcher) -->
+        <activity
+            android:name=".wear.MainActivity"
             android:exported="true"
             android:label="@string/app_name">
             <intent-filter>
@@ -35,24 +45,91 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
+        <!-- Test Connection Activity -->
+        <activity
+            android:name=".wear.TestConnectionActivity"
+            android:exported="true"
+            android:label="Test Connection" />
 
-        <!-- Wearable Listener Service for communication with phone -->
+        <!-- Wearable Listener Service - FIXED VERSION -->
         <service
-            android:name=".services.WearableListenerService"
-            android:exported="true">
+            android:name=".wear.services.WearableListenerService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
-                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
-                <data
-                    android:host="*"
-                    android:scheme="wear" />
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <action android:name="com.google.android.gms.wearable.CAPABILITY_CHANGED" />
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <!-- Critical: These data elements must be separate -->
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/round" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/stats" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/test" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/shot" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/club" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/putt" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/hole" />
             </intent-filter>
         </service>
+        
+        <!-- Minimal test service to verify communication -->
+        <service
+            android:name=".wear.services.MinimalWearableService"
+            android:exported="true"
+            tools:ignore="ExportedService">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data android:scheme="wear" android:host="*" />
+            </intent-filter>
+        </service>
+        
+        <!-- Direct Message Service - Alternative approach -->
+        <service
+            android:name=".wear.services.DirectMessageService"
+            android:exported="false" />
+            
+        <!-- Global Listener Service - Starts at app launch -->
+        <service
+            android:name=".wear.GlobalListenerService"
+            android:exported="false" />
+            
+        <!-- Direct Test Receiver - For debugging -->
+        <receiver
+            android:name=".wear.DirectTestReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.minimalapp.wear.DIRECT_TEST" />
+            </intent-filter>
+        </receiver>
+        
+        <!-- Broadcast Message Service - Our main communication method -->
+        <service
+            android:name=".wear.services.BroadcastMessageService"
+            android:exported="false" />
+            
+        <!-- Message Broadcast Receiver - Static receiver for reliable communication -->
+        <receiver
+            android:name=".wear.MessageBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.minimalapp.wear.ROUND_DATA" />
+                <action android:name="com.minimalapp.wear.HOLE_DATA" />
+                <action android:name="com.minimalapp.wear.SHOT_DATA" />
+                <action android:name="com.minimalapp.wear.STATS_DATA" />
+                <action android:name="com.minimalapp.wear.TEST_MESSAGE" />
+            </intent-filter>
+        </receiver>
 
         <!-- Metadata for standalone app -->
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="false" />
+            
+        <!-- This should match the phone app package -->
+        <meta-data
+            android:name="com.google.android.wearable.companion"
+            android:value="com.minimalapp" />
     </application>
 
 </manifest>

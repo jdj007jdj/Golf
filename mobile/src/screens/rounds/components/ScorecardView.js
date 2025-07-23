@@ -93,16 +93,28 @@ const ScorecardView = ({
           wearableService.initialize();
           
           // Check initial connection status
+          console.log('[ScorecardView] Checking watch connection...');
           const isConnected = await wearableService.isConnected();
+          console.log('[ScorecardView] Watch connected:', isConnected);
           setWatchConnected(isConnected);
           
           // Start round on watch
-          await wearableService.startRound({
-            roundId: round.id,
+          const roundId = round?.id || round?._id || `temp_round_${Date.now()}`;
+          console.log('[ScorecardView] Starting round on watch with data:', {
+            roundId: roundId,
             courseName: course?.name || 'Unknown Course',
             currentHole: currentHole,
             totalHoles: holes.length
           });
+          console.log('[ScorecardView] Full round object:', round);
+          
+          const startResult = await wearableService.startRound({
+            roundId: roundId,
+            courseName: course?.name || 'Unknown Course',
+            currentHole: currentHole,
+            totalHoles: holes.length
+          });
+          console.log('[ScorecardView] Watch startRound result:', startResult);
           
         } catch (error) {
           console.error('Error initializing services:', error);

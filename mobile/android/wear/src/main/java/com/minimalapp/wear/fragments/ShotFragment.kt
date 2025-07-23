@@ -1,4 +1,5 @@
-package com.golfapp.wear.fragments
+package com.minimalapp.wear.fragments
+import com.minimalapp.R
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -11,13 +12,12 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
-import com.golfapp.wear.MainActivity
-import com.golfapp.wear.R
-import com.golfapp.wear.databinding.FragmentShotBinding
+import com.minimalapp.wear.MainActivity
 import com.google.android.gms.location.*
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import org.json.JSONObject
+import com.minimalapp.databinding.FragmentShotBinding
 import java.util.Date
 
 class ShotFragment : Fragment() {

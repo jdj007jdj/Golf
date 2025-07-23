@@ -1,12 +1,12 @@
-package com.golfapp.wear.fragments
+package com.minimalapp.wear.fragments
+import com.minimalapp.R
 
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import com.golfapp.wear.R
-import com.golfapp.wear.databinding.FragmentStatsBinding
+import com.minimalapp.databinding.FragmentStatsBinding
 
 class StatsFragment : Fragment() {
     

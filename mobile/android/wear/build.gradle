@@ -4,23 +4,39 @@ plugins {
 }
 
 android {
-    namespace 'com.golfapp.wear'
+    namespace 'com.minimalapp'
     compileSdk 34
+    
+    buildFeatures {
+        buildConfig true
+    }
 
     defaultConfig {
-        applicationId "com.golfapp.wear"
+        applicationId "com.minimalapp"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 5
+        versionName "1.1.0"
         
         // Battery optimization flags
         buildConfigField "boolean", "ENABLE_BATTERY_OPTIMIZATION", "true"
         buildConfigField "long", "GPS_UPDATE_INTERVAL", "10000L"
         buildConfigField "long", "STATS_UPDATE_INTERVAL", "15000L"
     }
+    
+    signingConfigs {
+        debug {
+            storeFile file('../app/debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
 
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -28,12 +44,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
     }
 
     viewBinding {
@@ -53,6 +69,12 @@ dependencies {
     implementation 'androidx.compose.ui:ui-tooling-preview:1.5.4'
     implementation 'androidx.activity:activity-compose:1.8.0'
     implementation 'androidx.fragment:fragment-ktx:1.6.2'
+    
+    // ConstraintLayout for wear
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // Material Components for Android
+    implementation 'com.google.android.material:material:1.11.0'
     
     // Wearable support
     implementation 'com.google.android.support:wearable:2.9.0'

@@ -22,6 +22,7 @@ import RoundHistoryScreen from '../screens/rounds/RoundHistoryScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import StatisticsScreen from '../screens/statistics/StatisticsScreen';
 import CourseDownloadScreen from '../screens/courses/CourseDownloadScreen';
+import WearOSTestScreen from '../screens/WearOSTestScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -70,6 +71,7 @@ const MainStack = ({ initialRouteName, initialParams }) => {
       <Stack.Screen name="Statistics" component={StatisticsScreen} />
       <Stack.Screen name="CourseDownload" component={CourseDownloadScreen} />
       <Stack.Screen name="ConvertAccount" component={ConvertAccountScreen} />
+      <Stack.Screen name="WearOSTest" component={WearOSTestScreen} />
     </Stack.Navigator>
   );
 };

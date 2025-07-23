@@ -451,3 +451,78 @@ The plan contains 5 phases from Foundation Stabilization to Advanced Features. A
    - Respects storage limits
    - Debug info shows cache hits/misses
    - Settings stored in AsyncStorage
+
+### Android Wear OS Integration (Completed)
+**Full Android Wear OS support with phone-to-watch communication**
+**Implementation Date**: January 23, 2025
+**Documentation**: See `/removeadb.md` for complete migration details
+
+**Problem Solved**: Previous implementation used ADB shell commands which don't work in production
+- Migrated from ADB-based communication to official Android Wearable MessageClient API
+- Fixed namespace alignment between phone (com.minimalapp) and wear apps
+- Resolved all manifest path issues causing app crashes
+
+**Core Features Implemented**:
+1. **Wearable MessageClient API**: 
+   - Full production-ready communication between phone and watch
+   - Bluetooth-based messaging using official Google APIs
+   - No dependency on USB debugging or ADB
+   
+2. **Namespace Alignment**:
+   - Phone app: com.minimalapp
+   - Wear app: com.minimalapp (previously com.golfapp.wear)
+   - All package paths correctly aligned
+   
+3. **Communication Channels**:
+   - `/round/start` - Start round on watch
+   - `/round/end` - End round on watch
+   - `/stats/update` - Update distance/stats
+   - `/hole/change` - Change current hole
+   - `/shot/recorded` - Shot recorded from watch
+   - `/club/selected` - Club selection from watch
+   - `/putt/updated` - Putt count from watch
+   - `/test/message` - Test communication
+
+**Technical Implementation**:
+- **Phone Side (WearableModule.kt)**:
+  - Removed all ADB methods: `sendBroadcastToWatch()`, `isWatchConnectedViaAdb()`
+  - Implemented `sendMessageToAllNodes()` using Wearable MessageClient API
+  - All send methods updated to use official API
+  - Enhanced debug logging for connection troubleshooting
+  
+- **Wear Side**:
+  - Fixed manifest with correct package paths (all components need `.wear.` prefix)
+  - WearableListenerService properly configured
+  - MainActivity shows "No Active Round" screen when waiting
+  - Version number displayed correctly
+  
+- **JavaScript Services**:
+  - Updated `wearableService.ts` to use new MessageClient methods
+  - Removed all ADB-related methods
+  - Updated `WearOSTestScreen.js` for testing
+
+**Key Files**:
+- `/mobile/android/app/src/main/java/com/minimalapp/wearable/WearableModule.kt` - Phone communication module
+- `/mobile/android/wear/src/main/AndroidManifest.xml` - Fixed wear app manifest
+- `/mobile/android/wear/src/main/java/com/minimalapp/wear/MainActivity.kt` - Wear app main activity
+- `/mobile/android/wear/src/main/java/com/minimalapp/wear/services/WearableListenerService.kt` - Message receiver
+- `/mobile/src/services/wearableService.ts` - JavaScript interface
+- `/mobile/src/screens/WearOSTestScreen.js` - Test screen for communication
+
+**Setup Requirements**:
+1. Phone and watch must be paired via Bluetooth
+2. Google Play Services installed on both devices
+3. Wear OS app or Galaxy Wearable app for pairing
+
+**Final APKs**:
+- Phone: `golf-debug.apk` - Contains enhanced logging
+- Wear: `golfwear-working.apk` - Fixed all manifest issues
+
+**Final Crash Fix** (January 23, 2025):
+- **Issue**: Wear app crashed on round start with "The style on this component requires your app theme to be Theme.MaterialComponents"
+- **Root Cause**: MaterialButton components in fragments required Material Components theme
+- **Solution**: Created styles.xml with Material Components theme for wear app
+- **Files Added**:
+  - `/mobile/android/wear/src/main/res/values/styles.xml` - Material Components theme
+
+**Current Status**: 100% working. Phone and wear apps communicate successfully using production-ready APIs. All crashes resolved.

@@ -7,12 +7,21 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     
+    <!-- Bluetooth permissions for Wear OS communication -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    
     <!-- Location features for MapLibre -->
     <uses-feature
         android:name="android.hardware.location"
         android:required="false" />
     <uses-feature
         android:name="android.hardware.location.gps"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.bluetooth"
         android:required="false" />
 
     <application
@@ -48,5 +57,10 @@
           <data android:scheme="wear" android:host="*" />
         </intent-filter>
       </service>
+      
+      <!-- Companion Device Service for Bluetooth communication -->
+      <service
+        android:name=".wearable.CompanionDeviceService"
+        android:exported="false" />
     </application>
 </manifest>

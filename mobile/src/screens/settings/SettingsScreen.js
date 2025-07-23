@@ -725,6 +725,18 @@ const SettingsScreen = ({ navigation }) => {
           </>
         )}
 
+        {/* Developer Tools Section */}
+        {renderSectionHeader('Developer Tools')}
+        <View style={styles.section}>
+          <TouchableOpacity 
+            style={styles.developerButton} 
+            onPress={() => navigation.navigate('WearOSTest')}
+          >
+            <Text style={styles.developerButtonText}>WearOS Communication Test</Text>
+            <Text style={styles.developerButtonDescription}>Test phone-watch connectivity</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Account Section */}
         {renderSectionHeader('Account')}
         <View style={styles.section}>
@@ -917,6 +929,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#D32F2F',
+  },
+  developerButton: {
+    margin: 16,
+    paddingVertical: 12,
+  },
+  developerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1976D2',
+  },
+  developerButtonDescription: {
+    fontSize: 13,
+    color: '#666666',
+    marginTop: 4,
   },
   loadingContainer: {
     flex: 1,

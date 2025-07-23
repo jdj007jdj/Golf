@@ -3,10 +3,20 @@ package com.minimalapp.wearable
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.google.android.gms.wearable.*
+import com.google.android.gms.tasks.Tasks
+import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
+import android.content.Intent
+import android.os.Process
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.os.Build
 
 class WearableModule(reactContext: ReactApplicationContext) : 
     ReactContextBaseJavaModule(reactContext),
@@ -45,6 +55,8 @@ class WearableModule(reactContext: ReactApplicationContext) :
     private var capabilityClient: CapabilityClient? = null
     private var nodeClient: NodeClient? = null
     private var connectedNodes = setOf<String>()
+    private var isBluetoothConnected = false
+    private var companionDeviceReceiver: BroadcastReceiver? = null
 
     override fun getName(): String = NAME
 
@@ -61,7 +73,48 @@ class WearableModule(reactContext: ReactApplicationContext) :
             // Register listeners
             dataClient?.addListener(this)
             messageClient?.addListener(this)
-            capabilityClient?.addListener(this, "wear_app", CapabilityClient.FILTER_REACHABLE)
+            capabilityClient?.addListener(this, Uri.parse("wear://*/wear_app"), CapabilityClient.FILTER_REACHABLE)
+            
+            // Register for Bluetooth connection broadcasts
+            companionDeviceReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    when (intent?.action) {
+                        CompanionDeviceService.ACTION_DEVICE_CONNECTED -> {
+                            isBluetoothConnected = true
+                            Log.d(TAG, "Bluetooth connected to watch")
+                            sendEvent(EVENT_CONNECTION_STATUS, Arguments.createMap().apply {
+                                putBoolean("bluetoothConnected", true)
+                                putBoolean("connected", true)
+                            })
+                        }
+                        CompanionDeviceService.ACTION_DEVICE_DISCONNECTED -> {
+                            isBluetoothConnected = false
+                            Log.d(TAG, "Bluetooth disconnected from watch")
+                            sendEvent(EVENT_CONNECTION_STATUS, Arguments.createMap().apply {
+                                putBoolean("bluetoothConnected", false)
+                                putBoolean("connected", false)
+                            })
+                        }
+                    }
+                }
+            }
+            
+            val filter = IntentFilter().apply {
+                addAction(CompanionDeviceService.ACTION_DEVICE_CONNECTED)
+                addAction(CompanionDeviceService.ACTION_DEVICE_DISCONNECTED)
+            }
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(companionDeviceReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                context.registerReceiver(companionDeviceReceiver, filter)
+            }
+            
+            // Start Companion Device Service
+            val serviceIntent = Intent(context, CompanionDeviceService::class.java).apply {
+                action = CompanionDeviceService.ACTION_START_SERVICE
+            }
+            context.startService(serviceIntent)
             
             // Check initial connection
             checkWearableConnection()
@@ -73,30 +126,47 @@ class WearableModule(reactContext: ReactApplicationContext) :
         dataClient?.removeListener(this)
         messageClient?.removeListener(this)
         capabilityClient?.removeListener(this)
+        
+        // Unregister Bluetooth receiver
+        companionDeviceReceiver?.let {
+            reactApplicationContext?.unregisterReceiver(it)
+        }
+        
+        // Stop Companion Device Service
+        reactApplicationContext?.let { context ->
+            val serviceIntent = Intent(context, CompanionDeviceService::class.java)
+            context.stopService(serviceIntent)
+        }
+        
         scope.cancel()
         super.invalidate()
     }
 
     @ReactMethod
     fun startRound(roundData: ReadableMap, promise: Promise) {
+        Log.d(TAG, "startRound called with data: $roundData")
         scope.launch {
             try {
                 val roundJson = JSONObject().apply {
-                    put("roundId", roundData.getString("roundId"))
-                    put("courseName", roundData.getString("courseName"))
-                    put("currentHole", roundData.getInt("currentHole"))
-                    put("totalHoles", roundData.getInt("totalHoles"))
+                    put("roundId", roundData.getString("roundId") ?: "unknown")
+                    put("courseName", roundData.getString("courseName") ?: "Unknown Course")
+                    put("currentHole", if (roundData.hasKey("currentHole")) roundData.getInt("currentHole") else 1)
+                    put("totalHoles", if (roundData.hasKey("totalHoles")) roundData.getInt("totalHoles") else 18)
                 }
+                
+                Log.d(TAG, "Sending round data to watch: $roundJson")
                 
                 // Send round start message
                 sendMessageToAllNodes(PATH_ROUND_START, roundJson.toString().toByteArray())
                 
                 // Store round data for sync
-                dataClient?.putDataItem(
-                    PutDataRequest.create(PATH_ROUND_DATA).apply {
-                        data = roundJson.toString().toByteArray()
-                    }
-                )?.await()
+                val putDataRequest = PutDataRequest.create(PATH_ROUND_DATA).apply {
+                    data = roundJson.toString().toByteArray()
+                    setUrgent()
+                }
+                
+                val result = dataClient?.putDataItem(putDataRequest)?.await()
+                Log.d(TAG, "Round data stored: ${result?.uri}")
                 
                 promise.resolve(true)
             } catch (e: Exception) {
@@ -250,6 +320,34 @@ class WearableModule(reactContext: ReactApplicationContext) :
                     Log.e(TAG, "Error parsing putt data", e)
                 }
             }
+            "/test/response" -> {
+                Log.d(TAG, "===============================================")
+                Log.d(TAG, "TEST RESPONSE RECEIVED FROM WATCH!")
+                Log.d(TAG, "Message: $data")
+                Log.d(TAG, "From: ${messageEvent.sourceNodeId}")
+                Log.d(TAG, "===============================================")
+            }
+            "/test" -> {
+                Log.d(TAG, "===============================================")
+                Log.d(TAG, "SIMPLE TEST MESSAGE FROM WATCH!")
+                Log.d(TAG, "Message: $data")
+                Log.d(TAG, "From: ${messageEvent.sourceNodeId}")
+                Log.d(TAG, "===============================================")
+                
+                // Send response back
+                scope.launch {
+                    try {
+                        messageClient?.sendMessage(
+                            messageEvent.sourceNodeId,
+                            "/test/reply",
+                            "Phone received: $data".toByteArray()
+                        )?.await()
+                        Log.d(TAG, "Sent reply back to watch")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to send reply", e)
+                    }
+                }
+            }
         }
     }
 
@@ -272,11 +370,34 @@ class WearableModule(reactContext: ReactApplicationContext) :
     }
 
     private suspend fun sendMessageToAllNodes(path: String, data: ByteArray) {
-        val nodes = nodeClient?.connectedNodes?.await() ?: return
-        nodes.forEach { node ->
-            messageClient?.sendMessage(node.id, path, data)?.await()
-            Log.d(TAG, "Message sent to ${node.displayName}: $path")
+        Log.d(TAG, "===============================================")
+        Log.d(TAG, "sendMessageToAllNodes called")
+        Log.d(TAG, "Path: $path")
+        Log.d(TAG, "Data size: ${data.size} bytes")
+        Log.d(TAG, "Data content: ${String(data)}")
+        
+        val nodes = nodeClient?.connectedNodes?.await()
+        if (nodes == null || nodes.isEmpty()) {
+            Log.w(TAG, "No connected nodes found - CHECK BLUETOOTH/WIFI CONNECTION")
+            Log.d(TAG, "===============================================")
+            return
         }
+        
+        Log.d(TAG, "Found ${nodes.size} connected nodes:")
+        nodes.forEach { node: Node ->
+            Log.d(TAG, "  - ${node.displayName} (${node.id}) nearby: ${node.isNearby}")
+        }
+        
+        nodes.forEach { node: Node ->
+            try {
+                Log.d(TAG, "Sending message to ${node.displayName}...")
+                val result = messageClient?.sendMessage(node.id, path, data)?.await()
+                Log.d(TAG, "✓ Message sent successfully to ${node.displayName}")
+            } catch (e: Exception) {
+                Log.e(TAG, "✗ Failed to send to ${node.displayName}: ${e.message}", e)
+            }
+        }
+        Log.d(TAG, "===============================================")
     }
 
     private fun checkWearableConnection() {
@@ -300,4 +421,194 @@ class WearableModule(reactContext: ReactApplicationContext) :
             ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             ?.emit(eventName, params)
     }
+    
+    // Test methods for debugging
+    @ReactMethod
+    fun getConnectedNodes(promise: Promise) {
+        scope.launch {
+            try {
+                val nodes = nodeClient?.connectedNodes?.await()
+                val result = Arguments.createMap()
+                val nodeArray = Arguments.createArray()
+                
+                nodes?.forEach { node ->
+                    val nodeMap = Arguments.createMap().apply {
+                        putString("id", node.id)
+                        putString("displayName", node.displayName)
+                        putBoolean("isNearby", node.isNearby)
+                    }
+                    nodeArray.pushMap(nodeMap)
+                }
+                
+                result.putArray("nodes", nodeArray)
+                result.putInt("count", nodes?.size ?: 0)
+                promise.resolve(result)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting connected nodes", e)
+                promise.reject("GET_NODES_ERROR", e.message, e)
+            }
+        }
+    }
+    
+    @ReactMethod
+    fun sendMessage(nodeId: String, path: String, message: String, promise: Promise) {
+        scope.launch {
+            try {
+                Log.d(TAG, "TEST: Sending message to $nodeId on path $path: $message")
+                val result = messageClient?.sendMessage(nodeId, path, message.toByteArray())?.await()
+                Log.d(TAG, "TEST: Message sent successfully")
+                
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                    putString("nodeId", nodeId)
+                    putString("path", path)
+                })
+            } catch (e: Exception) {
+                Log.e(TAG, "TEST: Error sending message", e)
+                promise.reject("SEND_MESSAGE_ERROR", e.message, e)
+            }
+        }
+    }
+    
+    // Required for NativeEventEmitter
+    @ReactMethod
+    fun addListener(eventName: String) {
+        // Keep track of listeners if needed
+        Log.d(TAG, "addListener called for: $eventName")
+    }
+    
+    @ReactMethod
+    fun removeListeners(count: Int) {
+        // Remove listeners if needed
+        Log.d(TAG, "removeListeners called with count: $count")
+    }
+    
+    // ============================================
+    
+    @ReactMethod
+    fun sendTestBroadcast(message: String, promise: Promise) {
+        scope.launch {
+            try {
+                val testData = JSONObject().apply {
+                    put("message", message)
+                    put("timestamp", System.currentTimeMillis())
+                }.toString().toByteArray()
+                
+                sendMessageToAllNodes("/test/message", testData)
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("MESSAGE_ERROR", e.message, e)
+            }
+        }
+    }
+    
+    /**
+     * Send round data via Wearable API
+     */
+    @ReactMethod
+    fun sendRoundDataMessage(roundData: ReadableMap, promise: Promise) {
+        scope.launch {
+            try {
+                val roundJson = JSONObject().apply {
+                    put("roundId", roundData.getString("roundId") ?: "unknown")
+                    put("courseName", roundData.getString("courseName") ?: "Unknown Course")
+                    put("currentHole", if (roundData.hasKey("currentHole")) roundData.getInt("currentHole") else 1)
+                    put("totalHoles", if (roundData.hasKey("totalHoles")) roundData.getInt("totalHoles") else 18)
+                    put("timestamp", System.currentTimeMillis())
+                }
+                
+                sendMessageToAllNodes(PATH_ROUND_START, roundJson.toString().toByteArray())
+                
+                // Also store in DataClient for persistence
+                val putDataRequest = PutDataRequest.create(PATH_ROUND_DATA).apply {
+                    data = roundJson.toString().toByteArray()
+                    setUrgent()
+                }
+                dataClient?.putDataItem(putDataRequest)?.await()
+                
+                Log.d(TAG, "Round data sent via Wearable API")
+                promise.resolve(true)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending round data", e)
+                promise.reject("ROUND_DATA_ERROR", e.message, e)
+            }
+        }
+    }
+    
+    /**
+     * Send hole data via Wearable API
+     */
+    @ReactMethod
+    fun sendHoleDataMessage(holeData: ReadableMap, promise: Promise) {
+        scope.launch {
+            try {
+                val holeJson = JSONObject().apply {
+                    put("holeNumber", holeData.getInt("holeNumber"))
+                    put("par", holeData.getInt("par"))
+                    put("distance", holeData.getInt("distance"))
+                    put("timestamp", System.currentTimeMillis())
+                }
+                
+                sendMessageToAllNodes(PATH_HOLE_CHANGE, holeJson.toString().toByteArray())
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("MESSAGE_ERROR", e.message, e)
+            }
+        }
+    }
+    
+    /**
+     * Send shot data via Wearable API
+     */
+    @ReactMethod
+    fun sendShotDataMessage(shotData: ReadableMap, promise: Promise) {
+        scope.launch {
+            try {
+                val shotJson = JSONObject().apply {
+                    put("club", shotData.getString("club"))
+                    put("distance", shotData.getInt("distance"))
+                    put("latitude", shotData.getDouble("latitude"))
+                    put("longitude", shotData.getDouble("longitude"))
+                    put("timestamp", System.currentTimeMillis())
+                }
+                
+                sendMessageToAllNodes(PATH_SHOT_RECORDED, shotJson.toString().toByteArray())
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("MESSAGE_ERROR", e.message, e)
+            }
+        }
+    }
+    
+    /**
+     * Send stats update via Wearable API
+     */
+    @ReactMethod
+    fun sendStatsDataMessage(statsData: ReadableMap, promise: Promise) {
+        scope.launch {
+            try {
+                val statsJson = JSONObject().apply {
+                    put("distanceToPin", statsData.getInt("distanceToPin"))
+                    put("currentScore", statsData.getInt("currentScore"))
+                    put("totalScore", statsData.getInt("totalScore"))
+                    put("timestamp", System.currentTimeMillis())
+                }
+                
+                sendMessageToAllNodes(PATH_STATS_UPDATE, statsJson.toString().toByteArray())
+                
+                // Also store in DataClient for persistence
+                dataClient?.putDataItem(
+                    PutDataRequest.create(PATH_STATS_DATA).apply {
+                        data = statsJson.toString().toByteArray()
+                        setUrgent()
+                    }
+                )?.await()
+                
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("MESSAGE_ERROR", e.message, e)
+            }
+        }
+    }
+    
 }
