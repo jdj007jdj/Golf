@@ -11,7 +11,7 @@ import androidx.wear.widget.SwipeDismissFrameLayout
 import com.minimalapp.databinding.ActivityMainBinding
 import com.minimalapp.R
 import com.minimalapp.BuildConfig
-import com.minimalapp.wear.fragments.ShotFragment
+import com.minimalapp.wear.fragments.ShotRecordingFragment
 import com.minimalapp.wear.fragments.ClubFragment
 import com.minimalapp.wear.fragments.PuttFragment
 import com.minimalapp.wear.fragments.StatsFragment
@@ -168,7 +168,7 @@ class MainActivity : FragmentActivity(),
         
         // Stop location updates in all fragments to save battery
         supportFragmentManager.fragments.forEach { fragment ->
-            if (fragment is ShotFragment) {
+            if (fragment is ShotRecordingFragment) {
                 fragment.onPause()
             }
         }
@@ -369,7 +369,7 @@ class MainActivity : FragmentActivity(),
         // Update each fragment with current hole
         supportFragmentManager.fragments.forEach { fragment ->
             when (fragment) {
-                is ShotFragment -> fragment.updateHole(currentHole)
+                is ShotRecordingFragment -> fragment.updateHole(currentHole)
                 is ClubFragment -> fragment.updateHole(currentHole)
                 is PuttFragment -> fragment.updateHole(currentHole)
                 is StatsFragment -> fragment.updateHole(currentHole)
@@ -451,16 +451,16 @@ class MainActivity : FragmentActivity(),
 
         override fun createFragment(position: Int) = try {
             when (position) {
-                0 -> ShotFragment()
+                0 -> ShotRecordingFragment()
                 1 -> ClubFragment()
                 2 -> PuttFragment()
                 3 -> StatsFragment()
-                else -> ShotFragment()
+                else -> ShotRecordingFragment()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error creating fragment at position $position", e)
             // Return a simple fragment as fallback
-            ShotFragment()
+            ShotRecordingFragment()
         }
     }
 }

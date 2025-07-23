@@ -137,24 +137,31 @@ const ScorecardView = ({
     const unsubscribeShot = wearableService.onShotRecorded(async (shotData) => {
       console.log('Shot received from watch:', shotData);
       
-      // Increment score for the hole
-      const currentScore = scores[shotData.holeNumber] || 0;
-      const newScore = currentScore + 1;
+      // Use the shot number from watch or calculate from current score
+      const shotNumber = shotData.shotNumber || (scores[shotData.holeNumber] || 0) + 1;
       
-      // Update score
+      // Update score to match shot number
       setScores(prev => ({
         ...prev,
-        [shotData.holeNumber]: newScore
+        [shotData.holeNumber]: shotNumber
       }));
+      
+      // Update club selection if provided
+      if (shotData.club) {
+        setClubs(prev => ({
+          ...prev,
+          [`${shotData.holeNumber}-${shotNumber}`]: shotData.club
+        }));
+      }
       
       // Log the shot with GPS data
       if (isShotTrackingEnabled) {
         try {
           await shotTrackingService.logShot(
             shotData.holeNumber,
-            newScore,
-            newScore,
-            null // No club yet
+            shotNumber,
+            shotNumber,
+            shotData.club || null
           );
           
           // TODO: Update shotTrackingService to accept location data from watch

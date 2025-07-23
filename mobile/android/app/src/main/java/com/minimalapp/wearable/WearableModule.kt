@@ -290,6 +290,8 @@ class WearableModule(reactContext: ReactApplicationContext) :
                         putDouble("longitude", shotData.getDouble("longitude"))
                         putDouble("accuracy", shotData.getDouble("accuracy"))
                         putInt("holeNumber", shotData.getInt("holeNumber"))
+                        putInt("shotNumber", shotData.optInt("shotNumber", 1))
+                        putString("club", shotData.optString("club", ""))
                     }
                     sendEvent(EVENT_SHOT_RECORDED, shotParams)
                 } catch (e: Exception) {
