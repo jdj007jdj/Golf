@@ -52,6 +52,7 @@ class MainActivity : FragmentActivity(),
     private var currentRoundId: String? = null
     private var currentHole: Int = 1
     private var isRoundActive: Boolean = false
+    private val holeScores = mutableMapOf<Int, Int>() // Track scores for each hole
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -268,6 +269,7 @@ class MainActivity : FragmentActivity(),
             "/round/end" -> handleRoundEnded()
             "/stats/update" -> handleStatsUpdate(messageEvent.data)
             "/hole/change" -> handleHoleChange(messageEvent.data)
+            "/score/update" -> handleScoreUpdate(messageEvent.data)
             PATH_ROUND_RESPONSE -> handleRoundResponse(messageEvent.data)
             "/test/message" -> {
                 runOnUiThread {
@@ -347,6 +349,30 @@ class MainActivity : FragmentActivity(),
             e.printStackTrace()
         }
     }
+    
+    private fun handleScoreUpdate(data: ByteArray) {
+        try {
+            val scoreData = JSONObject(String(data))
+            val holeNumber = scoreData.getInt("holeNumber")
+            val score = scoreData.getInt("score")
+            
+            Log.d(TAG, "Score update received: Hole $holeNumber, Score $score")
+            
+            // Store the score
+            holeScores[holeNumber] = score
+            
+            runOnUiThread {
+                // Update shot count in ShotRecordingFragment
+                supportFragmentManager.fragments.forEach { fragment ->
+                    if (fragment is ShotRecordingFragment) {
+                        fragment.updateShotCount(holeNumber, score)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling score update", e)
+        }
+    }
 
     private fun handleRoundStarted(data: ByteArray) {
         try {
@@ -356,6 +382,9 @@ class MainActivity : FragmentActivity(),
             // Use optString to handle missing or null roundId
             currentRoundId = roundData.optString("roundId", "unknown")
             currentHole = roundData.optInt("currentHole", 1)
+            
+            // Clear scores for new round
+            holeScores.clear()
             
             // Log the received data for debugging
             Log.d(TAG, "Round started with data: $roundData")
@@ -381,6 +410,7 @@ class MainActivity : FragmentActivity(),
     private fun handleRoundEnded() {
         isRoundActive = false
         currentRoundId = null
+        holeScores.clear()
         runOnUiThread {
             viewPager.isUserInputEnabled = false
             updateUIForRoundStatus()
@@ -450,6 +480,8 @@ class MainActivity : FragmentActivity(),
     }
 
     fun getCurrentHole(): Int = currentHole
+    
+    fun getCurrentScore(hole: Int): Int = holeScores[hole] ?: 0
     
     // Public method to trigger connect - can be called from anywhere
     fun connectToRound() {

@@ -514,15 +514,27 @@ class WearableModule(reactContext: ReactApplicationContext) :
     fun sendMessage(nodeId: String, path: String, message: String, promise: Promise) {
         scope.launch {
             try {
-                Log.d(TAG, "TEST: Sending message to $nodeId on path $path: $message")
-                val result = messageClient?.sendMessage(nodeId, path, message.toByteArray())?.await()
-                Log.d(TAG, "TEST: Message sent successfully")
-                
-                promise.resolve(Arguments.createMap().apply {
-                    putBoolean("success", true)
-                    putString("nodeId", nodeId)
-                    putString("path", path)
-                })
+                if (nodeId.isEmpty()) {
+                    // Send to all connected nodes
+                    Log.d(TAG, "Sending message to all nodes on path $path: $message")
+                    sendMessageToAllNodes(path, message.toByteArray())
+                    promise.resolve(Arguments.createMap().apply {
+                        putBoolean("success", true)
+                        putString("nodeId", "all")
+                        putString("path", path)
+                    })
+                } else {
+                    // Send to specific node
+                    Log.d(TAG, "TEST: Sending message to $nodeId on path $path: $message")
+                    val result = messageClient?.sendMessage(nodeId, path, message.toByteArray())?.await()
+                    Log.d(TAG, "TEST: Message sent successfully")
+                    
+                    promise.resolve(Arguments.createMap().apply {
+                        putBoolean("success", true)
+                        putString("nodeId", nodeId)
+                        putString("path", path)
+                    })
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "TEST: Error sending message", e)
                 promise.reject("SEND_MESSAGE_ERROR", e.message, e)

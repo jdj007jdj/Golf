@@ -162,6 +162,20 @@ class WearableService {
     }
   }
 
+  async updateScore(holeNumber: number, score: number): Promise<boolean> {
+    if (!WearableModule) return false;
+    
+    try {
+      console.log('[WearableService] Updating score on watch:', { holeNumber, score });
+      // Send score update message to watch
+      const scoreData = JSON.stringify({ holeNumber, score });
+      return await WearableModule.sendMessage('', '/score/update', scoreData);
+    } catch (error) {
+      console.error('Error updating score on watch:', error);
+      return false;
+    }
+  }
+
   // Connection status
   async isConnected(): Promise<boolean> {
     if (!WearableModule) return false;

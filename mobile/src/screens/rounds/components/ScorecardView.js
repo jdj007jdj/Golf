@@ -146,6 +146,9 @@ const ScorecardView = ({
         [shotData.holeNumber]: shotNumber
       }));
       
+      // Don't send score back to watch - it already knows
+      // This prevents circular updates
+      
       // Update club selection if provided
       if (shotData.club) {
         setClubs(prev => ({
@@ -277,8 +280,11 @@ const ScorecardView = ({
   useEffect(() => {
     if (currentHole) {
       wearableService.updateHole(currentHole).catch(console.error);
+      // Also send the current score for this hole
+      const currentScore = scores[currentHole] || 0;
+      wearableService.updateScore(currentHole, currentScore).catch(console.error);
     }
-  }, [currentHole]);
+  }, [currentHole, scores]);
 
   // Update selected club when hole changes
   useEffect(() => {
@@ -369,6 +375,14 @@ const ScorecardView = ({
       [holeNumber]: newScore
     }));
 
+    // Send score update to watch
+    try {
+      await wearableService.updateScore(holeNumber, newScore);
+      console.log(`[ScorecardView] Sent score update to watch: Hole ${holeNumber}, Score ${newScore}`);
+    } catch (error) {
+      console.error('Failed to update score on watch:', error);
+    }
+
     // Log shot with GPS if score increased (shot was taken)
     if (isShotTrackingEnabled && change > 0 && newScore > 0) {
       try {
@@ -442,6 +456,10 @@ const ScorecardView = ({
         ...prev,
         [holeNumber]: newScore
       }));
+      
+      // Send score update to watch for putts
+      await wearableService.updateScore(holeNumber, newScore);
+      console.log(`[ScorecardView] Sent putt score update to watch: Hole ${holeNumber}, Score ${newScore}`);
       
       // Handle GPS tracking directly for putts
       if (isShotTrackingEnabled) {

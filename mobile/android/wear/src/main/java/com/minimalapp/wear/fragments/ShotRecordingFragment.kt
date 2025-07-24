@@ -37,6 +37,7 @@ class ShotRecordingFragment : Fragment() {
     private var selectedClub: String? = null
     private var lastLocation: Location? = null
     private var isRecording: Boolean = false
+    private var shotRecorded: Boolean = false // Track if shot has been recorded
     
     // Track shots per hole
     private val shotsPerHole = mutableMapOf<Int, Int>()
@@ -94,18 +95,26 @@ class ShotRecordingFragment : Fragment() {
         
         titleText.text = "Hole $currentHole - $shotText"
         
-        if (selectedClub == null) {
-            // Show club selection
-            clubGrid.visibility = View.VISIBLE
-            recordButton.visibility = View.GONE
-            progressBar.visibility = View.GONE
-        } else {
-            // Show record button
-            clubGrid.visibility = View.GONE
-            recordButton.visibility = View.VISIBLE
-            recordButton.text = "Record with $selectedClub"
-            recordButton.isEnabled = !isRecording
-            progressBar.visibility = if (isRecording) View.VISIBLE else View.GONE
+        when {
+            !shotRecorded -> {
+                // Show record button first
+                clubGrid.visibility = View.GONE
+                recordButton.visibility = View.VISIBLE
+                recordButton.text = "Record Shot"
+                recordButton.isEnabled = !isRecording
+                progressBar.visibility = if (isRecording) View.VISIBLE else View.GONE
+            }
+            selectedClub == null -> {
+                // After recording, show club selection
+                clubGrid.visibility = View.VISIBLE
+                recordButton.visibility = View.GONE
+                progressBar.visibility = View.GONE
+                titleText.text = "Select Club Used"
+            }
+            else -> {
+                // Club selected, ready to send
+                sendShotWithClub()
+            }
         }
     }
     
@@ -140,7 +149,7 @@ class ShotRecordingFragment : Fragment() {
     
     private fun setupRecordButton() {
         recordButton.setOnClickListener {
-            if (!isRecording && selectedClub != null) {
+            if (!isRecording && !shotRecorded) {
                 vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
                 recordShot()
             }
@@ -207,9 +216,20 @@ class ShotRecordingFragment : Fragment() {
     }
     
     private fun sendShotToPhone(location: Location) {
-        val activity = activity as? MainActivity ?: return
+        // Store location for later when club is selected
+        lastLocation = location
+        shotRecorded = true
+        isRecording = false
         
-        // Create shot data
+        // Show club selection
+        updateUI()
+    }
+    
+    private fun sendShotWithClub() {
+        val mainActivity = activity as? MainActivity ?: return
+        val location = lastLocation ?: return
+        
+        // Create shot data with club
         val shotNumber = getCurrentShotNumber()
         val shotData = JSONObject().apply {
             put("timestamp", System.currentTimeMillis())
@@ -222,7 +242,7 @@ class ShotRecordingFragment : Fragment() {
         }
         
         // Send to phone
-        activity.sendMessageToPhone("/shot/recorded", shotData.toString().toByteArray())
+        mainActivity.sendMessageToPhone("/shot/recorded", shotData.toString().toByteArray())
         
         // Success feedback
         vibrator.vibrate(
@@ -234,16 +254,27 @@ class ShotRecordingFragment : Fragment() {
         )
         
         // Increment shot count for current hole
-        shotsPerHole[currentHole] = getCurrentShotNumber()
+        shotsPerHole[currentHole] = shotNumber
         
         // Reset for next shot
         selectedClub = null
-        isRecording = false
+        shotRecorded = false
+        lastLocation = null
         updateUI()
     }
     
     private fun getCurrentShotNumber(): Int {
-        return (shotsPerHole[currentHole] ?: 0) + 1
+        // First check if MainActivity has a score for this hole
+        val mainActivity = activity as? MainActivity
+        val currentScore = mainActivity?.getCurrentScore(currentHole) ?: 0
+        
+        // If we have a score from phone, use that + 1 for next shot
+        // Otherwise fall back to our local tracking
+        return if (currentScore > 0) {
+            currentScore + 1
+        } else {
+            (shotsPerHole[currentHole] ?: 0) + 1
+        }
     }
     
     private fun checkLocationPermission() {
@@ -306,12 +337,35 @@ class ShotRecordingFragment : Fragment() {
     fun updateHole(hole: Int) {
         currentHole = hole
         selectedClub = null
+        shotRecorded = false
+        lastLocation = null
         updateUI()
+    }
+    
+    fun updateShotCount(hole: Int, shotCount: Int) {
+        // Update the shot count for a specific hole
+        if (shotCount > 0) {
+            shotsPerHole[hole] = shotCount
+        } else {
+            shotsPerHole.remove(hole)
+        }
+        
+        // If updating current hole, refresh UI immediately
+        if (hole == currentHole) {
+            selectedClub = null
+            shotRecorded = false
+            lastLocation = null
+            activity?.runOnUiThread {
+                updateUI()
+            }
+        }
     }
     
     fun resetShots() {
         shotsPerHole.clear()
         selectedClub = null
+        shotRecorded = false
+        lastLocation = null
         updateUI()
     }
     
