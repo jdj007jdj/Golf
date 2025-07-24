@@ -526,3 +526,68 @@ The plan contains 5 phases from Foundation Stabilization to Advanced Features. A
   - `/mobile/android/wear/src/main/res/values/styles.xml` - Material Components theme
 
 **Current Status**: 100% working. Phone and wear apps communicate successfully using production-ready APIs. All crashes resolved.
+
+### Wear OS Shot Recording Enhancement (Completed)
+**Implementation Date**: January 24, 2025
+
+**Features Added**:
+1. **Immediate Club Selection Interface**:
+   - When "Record Shot" is tapped, shows 12 club buttons immediately
+   - 100x100 pixel buttons optimized for thumb interaction
+   - Grid layout with Driver, 3W, 5W, 4H, 5I-9I, PW, SW, LW
+   - Club selection required before recording shot
+
+2. **Shot Tracking Integration**:
+   - Syncs with phone app's existing shot and club tracking system
+   - Updates same data structures - not separate tracking
+   - Shot numbers auto-increment (Tee Shot, 2nd Shot, 3rd Shot, etc.)
+   - GPS location captured with each shot
+
+3. **Files Added/Modified**:
+   - `/mobile/android/wear/src/main/java/com/minimalapp/wear/fragments/ShotRecordingFragment.kt` - New fragment
+   - `/mobile/android/wear/src/main/res/layout/fragment_shot_recording.xml` - Club grid layout
+   - Updated MainActivity to use ShotRecordingFragment instead of ShotFragment
+   - Enhanced WearableModule to handle club data in shot messages
+   - Updated ScorecardView.js to sync club selections from watch
+
+### Connect to Round Feature (Completed)
+**Implementation Date**: January 24, 2025
+
+**Problem Solved**: Watch app loses connection when phone screen turns off or when switching apps
+- Watch shows "No Active Round" even when a round is active on phone
+- Manual reconnection needed to restore round data
+
+**Solution Implemented**:
+1. **Connect to Round Button**:
+   - Green button on "No Active Round" screen
+   - Full-width for easy tapping
+   - Shows connection status messages
+
+2. **Request/Response Pattern**:
+   - Watch sends `/round/request` to phone
+   - Phone checks for active round in memory and DataClient
+   - Responds with round data or "NO_ACTIVE_ROUND"
+   - 5-second timeout with status updates
+
+3. **Auto-Reconnection**:
+   - Automatically attempts connection on app resume
+   - 500ms delay for services to reconnect
+   - Manual button as fallback option
+
+4. **Enhanced Phone Persistence**:
+   - WearableModule stores round data in memory
+   - Falls back to DataClient if memory cleared
+   - Ensures round data survives app lifecycle
+
+5. **UI Improvements**:
+   - Scrollable layout with golf emoji (⛳)
+   - Smaller text sizes optimized for watch
+   - Connection status with clear messages
+   - Version number visible for debugging
+
+**Files Modified**:
+- `/mobile/android/wear/src/main/res/layout/activity_main.xml` - Added button and made scrollable
+- `/mobile/android/wear/src/main/java/com/minimalapp/wear/MainActivity.kt` - Connect logic
+- `/mobile/android/app/src/main/java/com/minimalapp/wearable/WearableModule.kt` - Round persistence
+
+**Current Status**: 100% working. Watch can reconnect to active rounds with one tap.

@@ -3,6 +3,7 @@ package com.minimalapp.wear
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.view.MotionEvent
 import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
@@ -19,9 +20,12 @@ import com.minimalapp.wear.services.WearableListenerService
 import com.google.android.gms.wearable.*
 import org.json.JSONObject
 import android.widget.TextView
+import android.widget.Button
+import android.widget.ScrollView
 import kotlinx.coroutines.*
 import com.google.android.gms.tasks.Tasks
 import android.util.Log
+import com.google.android.material.button.MaterialButton
 
 class MainActivity : FragmentActivity(), 
     DataClient.OnDataChangedListener,
@@ -29,6 +33,8 @@ class MainActivity : FragmentActivity(),
 
     companion object {
         const val TAG = "GolfWearMain"
+        const val PATH_REQUEST_ROUND = "/round/request"
+        const val PATH_ROUND_RESPONSE = "/round/response"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -37,6 +43,10 @@ class MainActivity : FragmentActivity(),
     private lateinit var nodeClient: NodeClient
     private lateinit var viewPager: ViewPager2
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
+    // UI elements
+    private var connectButton: MaterialButton? = null
+    private var connectionStatus: TextView? = null
     
     // Current round data
     private var currentRoundId: String? = null
@@ -62,6 +72,35 @@ class MainActivity : FragmentActivity(),
         setupViewPager()
         setupSwipeDismiss()
         setupTestButton()
+        
+        // Get UI references and setup connect button with multiple approaches
+        connectButton = findViewById<MaterialButton>(R.id.connect_round_button)
+        connectionStatus = findViewById<TextView>(R.id.connection_status)
+        
+        // Try multiple ways to ensure button works
+        connectButton?.let { button ->
+            Log.d(TAG, "Connect button found: $button")
+            Log.d(TAG, "Button visibility: ${button.visibility}, enabled: ${button.isEnabled}")
+            
+            // Add touch listener to debug
+            button.setOnTouchListener { v, event ->
+                Log.d(TAG, "Connect button touched! Event: $event")
+                false // Return false to allow click to process
+            }
+            
+            button.setOnClickListener {
+                Log.d(TAG, "Connect button clicked (direct)!")
+                requestActiveRound()
+            }
+        } ?: Log.e(TAG, "Connect button is NULL!")
+        
+        // Also try finding by different approach
+        findViewById<View>(R.id.connect_round_button)?.setOnClickListener {
+            Log.d(TAG, "Connect button clicked (findViewById)!")
+            requestActiveRound()
+        }
+        
+        setupConnectButton()
         
         // Set version text
         findViewById<TextView>(R.id.version_text)?.text = "v${BuildConfig.VERSION_NAME}"
@@ -156,9 +195,24 @@ class MainActivity : FragmentActivity(),
 
     override fun onResume() {
         super.onResume()
+        Log.d(TAG, "onResume called")
         dataClient.addListener(this)
         messageClient.addListener(this)
         checkPhoneConnection()
+        
+        // If no round is active, try to connect automatically
+        if (!isRoundActive) {
+            Log.d(TAG, "No active round on resume, checking for active round on phone")
+            // Give a small delay for services to reconnect
+            scope.launch {
+                delay(500)
+                runOnUiThread {
+                    if (!isRoundActive && connectButton?.isEnabled == true) {
+                        requestActiveRound()
+                    }
+                }
+            }
+        }
     }
 
     override fun onPause() {
@@ -214,6 +268,7 @@ class MainActivity : FragmentActivity(),
             "/round/end" -> handleRoundEnded()
             "/stats/update" -> handleStatsUpdate(messageEvent.data)
             "/hole/change" -> handleHoleChange(messageEvent.data)
+            PATH_ROUND_RESPONSE -> handleRoundResponse(messageEvent.data)
             "/test/message" -> {
                 runOnUiThread {
                     Toast.makeText(this, "Test received: ${String(messageEvent.data)}", Toast.LENGTH_LONG).show()
@@ -349,11 +404,19 @@ class MainActivity : FragmentActivity(),
 
     private fun updateUIForRoundStatus() {
         try {
-            val noRoundLayout = findViewById<View>(R.id.no_round_layout)
+            val noRoundLayout = findViewById<ScrollView>(R.id.no_round_layout)
             if (!isRoundActive) {
                 // Show "waiting for round" screen
                 viewPager.visibility = View.GONE
                 noRoundLayout?.visibility = View.VISIBLE
+                
+                // Re-setup connect button when showing no round layout
+                val button = findViewById<MaterialButton>(R.id.connect_round_button)
+                Log.d(TAG, "updateUIForRoundStatus - Connect button: $button, enabled: ${button?.isEnabled}")
+                button?.setOnClickListener {
+                    Log.d(TAG, "Connect button clicked from updateUI!")
+                    requestActiveRound()
+                }
             } else {
                 viewPager.visibility = View.VISIBLE
                 noRoundLayout?.visibility = View.GONE
@@ -387,12 +450,124 @@ class MainActivity : FragmentActivity(),
     }
 
     fun getCurrentHole(): Int = currentHole
+    
+    // Public method to trigger connect - can be called from anywhere
+    fun connectToRound() {
+        Log.d(TAG, "connectToRound() called publicly")
+        runOnUiThread {
+            requestActiveRound()
+        }
+    }
 
     private fun setupTestButton() {
         // Add long press on version text to send test message
         findViewById<TextView>(R.id.version_text)?.setOnLongClickListener {
             sendTestMessage()
             true
+        }
+    }
+    
+    private fun setupConnectButton() {
+        Log.d(TAG, "Setting up connect button")
+        connectButton?.let { button ->
+            button.setOnClickListener {
+                Log.d(TAG, "Connect button clicked!")
+                requestActiveRound()
+            }
+            Log.d(TAG, "Connect button listener set")
+        } ?: Log.e(TAG, "Connect button is null!")
+    }
+    
+    private fun requestActiveRound() {
+        Log.d(TAG, "requestActiveRound called")
+        connectionStatus?.apply {
+            text = "Connecting..."
+            visibility = View.VISIBLE
+        }
+        connectButton?.isEnabled = false
+        
+        scope.launch {
+            try {
+                Log.d(TAG, "Getting connected nodes...")
+                val nodes = Tasks.await(nodeClient.connectedNodes)
+                Log.d(TAG, "Found ${nodes.size} connected nodes")
+                
+                if (nodes.isEmpty()) {
+                    Log.w(TAG, "No connected nodes found")
+                    runOnUiThread {
+                        connectionStatus?.text = "No phone connected"
+                        connectButton?.isEnabled = true
+                    }
+                    return@launch
+                }
+                
+                // Send request to phone for active round
+                nodes.forEach { node ->
+                    Log.d(TAG, "Sending round request to node: ${node.displayName}")
+                    val result = Tasks.await(
+                        messageClient.sendMessage(
+                            node.id,
+                            PATH_REQUEST_ROUND,
+                            ByteArray(0)
+                        )
+                    )
+                    Log.d(TAG, "Round request sent successfully to ${node.displayName}")
+                }
+                
+                // Set timeout for response
+                runOnUiThread {
+                    connectionStatus?.text = "Waiting for response..."
+                }
+                
+                // Re-enable button after delay if no response
+                delay(5000)
+                runOnUiThread {
+                    if (!isRoundActive) {
+                        Log.d(TAG, "Timeout - no round response received")
+                        connectionStatus?.text = "No active round found"
+                        connectButton?.isEnabled = true
+                    }
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error requesting round", e)
+                e.printStackTrace()
+                runOnUiThread {
+                    connectionStatus?.text = "Error: ${e.message}"
+                    connectButton?.isEnabled = true
+                }
+            }
+        }
+    }
+    
+    private fun handleRoundResponse(data: ByteArray) {
+        Log.d(TAG, "handleRoundResponse called with data size: ${data.size}")
+        try {
+            val response = String(data)
+            Log.d(TAG, "Round response: $response")
+            
+            if (response == "NO_ACTIVE_ROUND") {
+                Log.d(TAG, "No active round on phone")
+                runOnUiThread {
+                    connectionStatus?.text = "No active round on phone"
+                    connectButton?.isEnabled = true
+                }
+            } else {
+                // Handle as round data
+                Log.d(TAG, "Active round data received, starting round")
+                handleRoundStarted(data)
+                runOnUiThread {
+                    connectionStatus?.visibility = View.GONE
+                    connectButton?.isEnabled = true
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling round response", e)
+            e.printStackTrace()
+            runOnUiThread {
+                connectionStatus?.text = "Error: ${e.message}"
+                connectButton?.isEnabled = true
+            }
         }
     }
 

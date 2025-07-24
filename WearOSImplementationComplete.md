@@ -70,5 +70,21 @@ The Android Wear OS integration has been successfully completed with all request
 - Phone: `mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 - Watch: `mobile/android/wear/build/outputs/apk/debug/wear-debug.apk`
 
+## Connect to Round Feature
+### Problem
+- Watch app loses connection when phone screen turns off or when switching apps
+- Shows "No Active Round" even when a round is active on phone
+
+### Solution
+1. **Connect to Round Button**: Green button for manual reconnection
+2. **Auto-Reconnect**: Automatically attempts connection on app resume
+3. **Enhanced Persistence**: Phone maintains round data in memory and DataClient
+4. **Status Messages**: Clear feedback during connection process
+
+### Implementation
+- Request/response pattern using `/round/request` and `/round/response`
+- 5-second timeout with status updates
+- Scrollable UI with golf emoji and connection status
+
 ## Status: COMPLETE ✓
-All requested features have been implemented and tested. The Wear OS integration provides a seamless golf tracking experience with thumb-friendly controls and real-time synchronization with the phone app.
+All requested features have been implemented and tested. The Wear OS integration provides a seamless golf tracking experience with thumb-friendly controls, real-time synchronization, and easy reconnection to active rounds.

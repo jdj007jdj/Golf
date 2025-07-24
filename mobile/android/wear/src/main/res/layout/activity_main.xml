@@ -19,49 +19,83 @@
             android:visibility="gone" />
 
         <!-- No round active layout -->
-        <LinearLayout
+        <ScrollView
             android:id="@+id/no_round_layout"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="20dp"
+            android:fillViewport="true"
             android:background="@android:color/black"
             android:visibility="visible">
 
-            <ImageView
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/ic_golf"
-                android:tint="@android:color/white" />
-
-            <TextView
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="No Active Round"
-                android:textColor="@android:color/white"
-                android:textSize="18sp"
-                android:layout_marginTop="16dp" />
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:padding="16dp">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Start a round on your phone"
-                android:textColor="@android:color/darker_gray"
-                android:textSize="14sp"
-                android:layout_marginTop="8dp"
-                android:gravity="center" />
+                <!-- Golf icon placeholder -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⛳"
+                    android:textSize="32sp"
+                    android:layout_marginTop="8dp" />
 
-            <TextView
-                android:id="@+id/version_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="v1.0.1"
-                android:textColor="@android:color/darker_gray"
-                android:textSize="12sp"
-                android:layout_marginTop="24dp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="No Active Round"
+                    android:textColor="@android:color/white"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="8dp" />
 
-        </LinearLayout>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Start a round on\nyour phone"
+                    android:textColor="@android:color/darker_gray"
+                    android:textSize="12sp"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center" />
+
+                <!-- Connect to Round Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/connect_round_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Connect to Round"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:backgroundTint="#4CAF50"
+                    app:cornerRadius="24dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginHorizontal="8dp" />
+
+                <!-- Connection Status -->
+                <TextView
+                    android:id="@+id/connection_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#FF9800"
+                    android:textSize="11sp"
+                    android:layout_marginTop="4dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/version_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="v1.0.1"
+                    android:textColor="@android:color/darker_gray"
+                    android:textSize="10sp"
+                    android:layout_marginTop="8dp" />
+
+            </LinearLayout>
+
+        </ScrollView>
 
     </FrameLayout>
 

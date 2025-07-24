@@ -36,6 +36,8 @@ class WearableModule(reactContext: ReactApplicationContext) :
         const val PATH_SHOT_RECORDED = "/shot/recorded"
         const val PATH_CLUB_SELECTED = "/club/selected"
         const val PATH_PUTT_UPDATED = "/putt/updated"
+        const val PATH_ROUND_REQUEST = "/round/request"
+        const val PATH_ROUND_RESPONSE = "/round/response"
         
         // Data paths
         const val PATH_ROUND_DATA = "/round/data"
@@ -57,12 +59,15 @@ class WearableModule(reactContext: ReactApplicationContext) :
     private var connectedNodes = setOf<String>()
     private var isBluetoothConnected = false
     private var companionDeviceReceiver: BroadcastReceiver? = null
+    
+    // Store current round data for reconnection
+    private var currentRoundData: String? = null
 
     override fun getName(): String = NAME
 
     override fun initialize() {
         super.initialize()
-        Log.d(TAG, "Initializing WearableModule")
+        Log.d(TAG, "Initializing WearableModule - currentRoundData: $currentRoundData")
         
         reactApplicationContext?.let { context ->
             dataClient = Wearable.getDataClient(context)
@@ -156,6 +161,10 @@ class WearableModule(reactContext: ReactApplicationContext) :
                 
                 Log.d(TAG, "Sending round data to watch: $roundJson")
                 
+                // Store round data for later requests
+                currentRoundData = roundJson.toString()
+                Log.d(TAG, "Stored round data for future requests: $currentRoundData")
+                
                 // Send round start message
                 sendMessageToAllNodes(PATH_ROUND_START, roundJson.toString().toByteArray())
                 
@@ -184,6 +193,7 @@ class WearableModule(reactContext: ReactApplicationContext) :
                 
                 // Clear round data
                 dataClient?.deleteDataItems(Uri.parse("wear://*/round/data"))?.await()
+                currentRoundData = null
                 
                 promise.resolve(true)
             } catch (e: Exception) {
@@ -328,6 +338,54 @@ class WearableModule(reactContext: ReactApplicationContext) :
                 Log.d(TAG, "Message: $data")
                 Log.d(TAG, "From: ${messageEvent.sourceNodeId}")
                 Log.d(TAG, "===============================================")
+            }
+            PATH_ROUND_REQUEST -> {
+                Log.d(TAG, "Round request received from watch - currentRoundData is ${if (currentRoundData != null) "present" else "null"}")
+                scope.launch {
+                    try {
+                        // First check memory
+                        var roundData = currentRoundData
+                        
+                        // If not in memory, check DataClient
+                        if (roundData == null) {
+                            Log.d(TAG, "Checking DataClient for round data...")
+                            try {
+                                val dataItems = dataClient?.getDataItems(Uri.parse("wear://*/round/data"))?.await()
+                                dataItems?.forEach { item ->
+                                    val data = item.data
+                                    if (data != null && data.isNotEmpty()) {
+                                        roundData = String(data)
+                                        currentRoundData = roundData
+                                        Log.d(TAG, "Found round data in DataClient: $roundData")
+                                    }
+                                }
+                                dataItems?.release()
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error checking DataClient", e)
+                            }
+                        }
+                        
+                        val response = if (roundData != null) {
+                            // Send the current round data
+                            Log.d(TAG, "Sending active round data: $roundData")
+                            roundData!!.toByteArray()
+                        } else {
+                            // No active round
+                            Log.d(TAG, "No active round data available in memory or DataClient")
+                            "NO_ACTIVE_ROUND".toByteArray()
+                        }
+                        
+                        messageClient?.sendMessage(
+                            messageEvent.sourceNodeId,
+                            PATH_ROUND_RESPONSE,
+                            response
+                        )?.await()
+                        
+                        Log.d(TAG, "Sent round response to watch: ${String(response)}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to send round response", e)
+                    }
+                }
             }
             "/test" -> {
                 Log.d(TAG, "===============================================")
@@ -579,6 +637,18 @@ class WearableModule(reactContext: ReactApplicationContext) :
             } catch (e: Exception) {
                 promise.reject("MESSAGE_ERROR", e.message, e)
             }
+        }
+    }
+    
+    /**
+     * Get current round data
+     */
+    @ReactMethod
+    fun getCurrentRoundData(promise: Promise) {
+        if (currentRoundData != null) {
+            promise.resolve(currentRoundData)
+        } else {
+            promise.resolve(null)
         }
     }
     
